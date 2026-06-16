@@ -389,7 +389,7 @@
 </div>
 
 <!-- Input para el escáner Honeywell EDA5S -->
-<input type="text" id="scannerInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<input type="text" id="scannerInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="none">
 
 <script>
     // Modelo de datos
@@ -402,6 +402,7 @@
     let scanTimeout = null;
     let lastScanTime = 0;
     let focoInterval = null;
+    let modalAbierto = false;
 
     // ===== FUNCIONES PRINCIPALES =====
     function cargarDatos() {
@@ -504,6 +505,14 @@
 
     // ===== MODAL DE CANTIDAD INLINE (reemplaza prompt) =====
     function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombreNuevo, marcaNueva) {
+        // Desactivar el scanner y desenfocar input
+        modalAbierto = true;
+        const scannerInput = document.getElementById('scannerInput');
+        if (scannerInput) {
+            scannerInput.blur();
+            scannerInput.readOnly = true;
+        }
+        
         const existing = document.querySelector('.modal-overlay');
         if (existing) existing.remove();
 
@@ -567,7 +576,12 @@
         });
 
         function cerrarModal() {
+            modalAbierto = false;
             overlay.classList.remove('active');
+            const scannerInput = document.getElementById('scannerInput');
+            if (scannerInput) {
+                scannerInput.readOnly = false;
+            }
             setTimeout(() => {
                 overlay.remove();
                 enfocarScannerInmediato();
@@ -614,8 +628,9 @@
     // ===== ENFOCAR SCANNER INMEDIATAMENTE =====
     function enfocarScannerInmediato() {
         const input = document.getElementById('scannerInput');
-        if (input) {
+        if (input && !modalAbierto) {
             input.value = '';
+            input.readOnly = false;
             input.focus();
             // Doble enfocado para asegurar
             setTimeout(() => {
@@ -636,21 +651,38 @@
 
         // Función de enfoque ultra-agresiva
         function mantenerFocoUltra() {
-            if (document.querySelector('.modal-overlay.active')) return;
+            // Si hay modal activo, desenfocar y salir
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) {
+                if (document.activeElement && document.activeElement.id === 'scannerInput') {
+                    document.activeElement.blur();
+                }
+                if (input) {
+                    input.readOnly = true;
+                }
+                return;
+            }
+            
+            // Si no hay modal, habilitar el input
+            if (input) {
+                input.readOnly = false;
+            }
+            
             if (document.activeElement && 
                 document.activeElement.tagName === 'INPUT' && 
                 document.activeElement.id !== 'scannerInput' &&
                 document.activeElement.id !== 'manualCode' &&
                 document.activeElement.id !== 'cajasQuantity') return;
             
-            input.value = '';
-            input.focus();
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
         }
 
         // ===== CAPTURA POR KEYDOWN =====
         document.addEventListener('keydown', function(e) {
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) return;
             if (e.target.id === 'manualCode' || e.target.id === 'cajasQuantity') return;
-            if (document.querySelector('.modal-overlay.active')) return;
 
             // Enter = fin de código
             if (e.key === 'Enter' || e.keyCode === 13 || e.which === 13) {
@@ -683,28 +715,39 @@
 
         // ===== CAPTURA POR INPUT =====
         input.addEventListener('input', function(e) {
-            const val = input.value.trim();
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) {
+                this.value = '';
+                return;
+            }
+            const val = this.value.trim();
             if (val.length >= 3) {
                 if (val.endsWith('\n') || val.endsWith('\r')) {
                     const codigo = val.replace(/[\r\n]/g, '').trim();
                     procesarCodigoEscaneado(codigo);
-                    input.value = '';
+                    this.value = '';
                 }
             }
         });
 
         // ===== CAPTURA POR PASTE =====
         input.addEventListener('paste', function(e) {
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) {
+                e.preventDefault();
+                this.value = '';
+                return;
+            }
             e.preventDefault();
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
             if (pasted && pasted.trim().length >= 3) {
                 procesarCodigoEscaneado(pasted.trim());
             }
-            input.value = '';
+            this.value = '';
         });
 
         // Función central de procesamiento
         function procesarCodigoEscaneado(codigo) {
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) return;
+            
             const now = Date.now();
             if (now - lastScanTime < 600) return; // Anti-doble más rápido
             lastScanTime = now;
@@ -737,6 +780,7 @@
         
         // Cuando el input pierde foco, recuperarlo INMEDIATAMENTE
         input.addEventListener('blur', function(e) {
+            if (modalAbierto || document.querySelector('.modal-overlay.active')) return;
             e.preventDefault();
             setTimeout(mantenerFocoUltra, 10);
             setTimeout(mantenerFocoUltra, 50);
@@ -770,6 +814,7 @@
     }
     
     function onScanSuccess(decodedText, decodedResult) {
+        if (modalAbierto || document.querySelector('.modal-overlay.active')) return;
         document.getElementById("lastScanned").innerHTML = decodedText;
         agregarProductoConBusqueda(decodedText, 1);
     }
@@ -948,6 +993,14 @@
 
     // ===== MODALES GENÉRICOS =====
     function showModal(options) {
+        // Desactivar el scanner y desenfocar input
+        modalAbierto = true;
+        const scannerInput = document.getElementById('scannerInput');
+        if (scannerInput) {
+            scannerInput.blur();
+            scannerInput.readOnly = true;
+        }
+        
         const existing = document.querySelector('.modal-overlay');
         if (existing) existing.remove();
 
@@ -1048,7 +1101,12 @@
         });
 
         function closeModal() {
+            modalAbierto = false;
             overlay.classList.remove('active');
+            const scannerInput = document.getElementById('scannerInput');
+            if (scannerInput) {
+                scannerInput.readOnly = false;
+            }
             setTimeout(() => {
                 overlay.remove();
                 enfocarScannerInmediato();
