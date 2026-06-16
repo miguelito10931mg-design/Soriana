@@ -8,126 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- HTML5 QR Code Library -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
-    // ===== SISTEMA DE MODALES NATIVOS =====
-    function showModal(options) {
-        // Cerrar modal existente
-        const existing = document.querySelector('.modal-overlay');
-        if (existing) existing.remove();
-
-        const overlay = document.createElement('div');
-        overlay.className = 'modal-overlay';
-
-        let iconHtml = '';
-        if (options.icon) {
-            const iconClass = options.iconType === 'error' ? 'error' : 
-                             options.iconType === 'warning' ? 'warning' : '';
-            iconHtml = `<div class="scan-success-icon ${iconClass}"><i class="fas fa-${options.icon}"></i></div>`;
-        }
-
-        let productInfoHtml = '';
-        if (options.productInfo) {
-            productInfoHtml = `
-                <div class="modal-product-info">
-                    <div class="modal-product-name">${escapeHtml(options.productInfo.name)}</div>
-                    <div class="modal-product-code">${escapeHtml(options.productInfo.code)}</div>
-                </div>
-            `;
-        }
-
-        let stepperHtml = '';
-        if (options.stepper) {
-            let val = options.stepper.value;
-            stepperHtml = `
-                <div class="modal-input-label">Cantidad de cajas</div>
-                <div class="stepper">
-                    <button class="stepper-btn" id="modalStepDown">−</button>
-                    <div class="stepper-value" id="modalStepValue">${val}</div>
-                    <button class="stepper-btn" id="modalStepUp">+</button>
-                </div>
-            `;
-        }
-
-        let actionsHtml = '';
-        options.actions.forEach((action, idx) => {
-            if (action.type === 'cancel') {
-                actionsHtml += `<button class="modal-btn modal-btn-cancel" data-action="cancel-${idx}">${action.text}</button>`;
-            } else if (action.type === 'danger') {
-                actionsHtml += `<button class="modal-btn modal-btn-danger" data-action="action-${idx}">${action.text}</button>`;
-            } else {
-                actionsHtml += `<button class="modal-btn modal-btn-primary" data-action="action-${idx}">${action.text}</button>`;
-            }
-        });
-
-        overlay.innerHTML = `
-            <div class="modal-sheet">
-                <div class="modal-handle"></div>
-                ${iconHtml}
-                <div class="modal-title">${options.title}</div>
-                ${options.message ? `<div class="modal-message">${options.message}</div>` : ''}
-                ${productInfoHtml}
-                ${stepperHtml}
-                <div class="modal-actions">
-                    ${actionsHtml}
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(overlay);
-
-        // Forzar reflow para animación
-        void overlay.offsetWidth;
-        overlay.classList.add('active');
-
-        // Stepper logic
-        if (options.stepper) {
-            let currentVal = options.stepper.value;
-            const valEl = document.getElementById('modalStepValue');
-            document.getElementById('modalStepDown').addEventListener('click', () => {
-                if (currentVal > 0) {
-                    currentVal--;
-                    valEl.textContent = currentVal;
-                    options.stepper.onChange(currentVal);
-                }
-            });
-            document.getElementById('modalStepUp').addEventListener('click', () => {
-                currentVal++;
-                valEl.textContent = currentVal;
-                options.stepper.onChange(currentVal);
-            });
-        }
-
-        // Action handlers
-        options.actions.forEach((action, idx) => {
-            const btn = overlay.querySelector(`[data-action="${action.type === 'cancel' ? 'cancel' : 'action'}-${idx}"]`);
-            if (btn) {
-                btn.addEventListener('click', () => {
-                    closeModal();
-                    if (action.action) action.action();
-                });
-            }
-        });
-
-        // Cerrar al tocar overlay
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeModal();
-        });
-
-        function closeModal() {
-            overlay.classList.remove('active');
-            setTimeout(() => overlay.remove(), 300);
-        }
-
-        // Cerrar con Escape
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
-    }
-
-</script>
+    </script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
@@ -526,7 +407,7 @@
         .product-card {
             background: var(--surface);
             border-radius: var(--radius-lg);
-            padding: 14px 16px;
+            padding: 16px;
             margin-bottom: 8px;
             transition: all 0.15s;
             border: 0.5px solid var(--separator);
@@ -552,8 +433,14 @@
 
         .product-info {
             display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .product-main {
+            display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
         }
 
@@ -564,12 +451,27 @@
 
         .product-name {
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 1rem;
             color: var(--text);
             margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            line-height: 1.3;
+            word-wrap: break-word;
+        }
+
+        .product-name i {
+            color: var(--blue);
+            margin-right: 6px;
+        }
+
+        .product-brand {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .product-brand i {
+            color: var(--purple);
+            margin-right: 4px;
         }
 
         .product-code {
@@ -583,28 +485,37 @@
             font-weight: 500;
         }
 
-        .product-brand {
-            font-size: 0.75rem;
-            color: var(--label);
+        .product-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        .product-timestamp {
+            font-size: 0.7rem;
+            color: var(--label);
         }
 
         .product-cajas {
             font-weight: 700;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             color: var(--green);
             background: rgba(48, 209, 88, 0.1);
-            padding: 6px 14px;
+            padding: 6px 16px;
             border-radius: 100px;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .product-actions {
             display: flex;
             gap: 6px;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 0.5px solid var(--separator);
+            margin-top: 8px;
+            justify-content: flex-end;
         }
 
         .icon-btn {
@@ -1017,7 +928,6 @@
         }
 
     </style>
-<base target="_blank">
 </head>
 <body>
 <div class="safe-area">
@@ -1025,7 +935,7 @@
         <div class="header-inner">
             <div class="title-section">
                 <h1>Scansoriana</h1>
-                <p>reinventando · Escáner </p>
+                <p>reinventando · Escáner</p>
             </div>
             <div class="stats-badge">
                 <div class="stat-pill"><i class="fas fa-boxes"></i> <span id="totalProductos">0</span></div>
@@ -1328,30 +1238,34 @@
         let html = '';
         productosArray.forEach(prod => {
             const displayName = prod.nombre || "📦 Producto sin descripción";
-            const displayBrand = prod.marca ? ` | ${prod.marca}` : "";
+            const displayBrand = prod.marca || "";
+            const hasBrand = displayBrand && displayBrand !== "Marca no especificada";
             
             html += `
                 <div class="product-card" data-code="${prod.codigo}">
                     <div class="product-info">
-                        <div class="product-details">
-                            <div class="product-name">
-                                <i class="fas fa-tag"></i> ${escapeHtml(displayName)}${escapeHtml(displayBrand)}
+                        <div class="product-main">
+                            <div class="product-details">
+                                <div class="product-name">
+                                    <i class="fas fa-tag"></i> ${escapeHtml(displayName)}
+                                </div>
+                                ${hasBrand ? `<div class="product-brand"><i class="fas fa-building"></i> ${escapeHtml(displayBrand)}</div>` : ''}
+                                <div class="product-code">
+                                    <i class="fas fa-barcode"></i> ${escapeHtml(prod.codigo)}
+                                </div>
+                                <div class="product-meta">
+                                    <span class="product-timestamp">
+                                        <i class="fas fa-clock"></i> ${new Date(prod.timestamp).toLocaleString()}
+                                    </span>
+                                </div>
                             </div>
-                            <div class="product-code">
-                                <i class="fas fa-barcode"></i> ${escapeHtml(prod.codigo)}
-                            </div>
-                            <div class="product-brand">
-                                <i class="fas fa-clock"></i> ${new Date(prod.timestamp).toLocaleString()}
+                            <div class="product-cajas">
+                                <i class="fas fa-cubes"></i> ${prod.cantidadCajas}
                             </div>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                            <div class="product-cajas">
-                                <i class="fas fa-cubes"></i> ${prod.cantidadCajas} caja(s)
-                            </div>
-                            <div class="product-actions">
-                                <button class="icon-btn edit-qty" data-code="${prod.codigo}" data-qty="${prod.cantidadCajas}" title="Editar cantidad"><i class="fas fa-pen"></i></button>
-                                <button class="icon-btn danger delete-prod" data-code="${prod.codigo}" title="Eliminar producto"><i class="fas fa-trash"></i></button>
-                            </div>
+                        <div class="product-actions">
+                            <button class="icon-btn edit-qty" data-code="${prod.codigo}" data-qty="${prod.cantidadCajas}" title="Editar cantidad"><i class="fas fa-pen"></i> Editar</button>
+                            <button class="icon-btn danger delete-prod" data-code="${prod.codigo}" title="Eliminar producto"><i class="fas fa-trash"></i> Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -1378,10 +1292,11 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
+        return str.replace(/[&<>"]/g, function(m) {
             if(m === '&') return '&amp;';
             if(m === '<') return '&lt;';
             if(m === '>') return '&gt;';
+            if(m === '"') return '&quot;';
             return m;
         });
     }
