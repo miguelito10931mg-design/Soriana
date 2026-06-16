@@ -957,14 +957,20 @@
             box-shadow: 0 0 20px rgba(48, 209, 88, 0.3);
         }
 
+        /* ===== CORRECCIÓN: Input del escáner Honeywell ===== */
         #scannerInput {
             position: fixed;
-            left: -9999px;
-            top: -9999px;
+            top: 0;
+            left: 0;
             width: 1px;
             height: 1px;
-            opacity: 0;
+            opacity: 0.01;
             pointer-events: none;
+            z-index: -1;
+            border: none;
+            padding: 0;
+            margin: 0;
+            font-size: 1px;
         }
     </style>
 </head>
@@ -1051,8 +1057,8 @@
     </div>
 </div>
 
-<!-- Input oculto para el escáner láser -->
-<input type="text" id="scannerInput" autofocus>
+<!-- Input oculto para el escáner láser Honeywell -->
+<input type="text" id="scannerInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
 <script>
     // Modelo de datos
@@ -1216,7 +1222,7 @@
         return true;
     }
 
-    // ===== FUNCIONES DEL ESCÁNER LÁSER =====
+    // ===== ESCÁNER LÁSER HONEYWELL - CORREGIDO =====
     function initLaserScanner() {
         const input = document.getElementById('scannerInput');
         if (!input) {
@@ -1224,78 +1230,94 @@
             return;
         }
 
-        input.addEventListener('keydown', function(e) {
-            // Detectar Enter (fin del código de barras)
+        // ===== MÉTODO 1: Captura por keystrokes =====
+        document.addEventListener('keydown', function(e) {
+            // Ignorar si hay un modal abierto
+            if (document.querySelector('.modal-overlay.active')) return;
+            
+            // Ignorar si estamos en un input visible (excepto el scannerInput)
+            if (e.target.tagName === 'INPUT' && e.target.id !== 'scannerInput') return;
+            if (e.target.tagName === 'TEXTAREA') return;
+            if (e.target.isContentEditable) return;
+
+            // Ignorar teclas de control
+            if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+            // Enter = fin de código
             if (e.key === 'Enter') {
-                if (scanBuffer.length > 0) {
-                    const codigo = scanBuffer.trim();
-                    
-                    // Evitar dobles escaneos
-                    const now = Date.now();
-                    if (now - lastScanTime < 500) {
-                        scanBuffer = '';
-                        return;
-                    }
-                    lastScanTime = now;
-                    
-                    // Mostrar feedback visual
-                    const reader = document.getElementById('reader');
-                    if (reader) {
-                        reader.classList.add('flash');
-                        setTimeout(() => {
-                            reader.classList.remove('flash');
-                        }, 300);
-                    }
-                    
-                    document.getElementById("lastScanned").innerHTML = codigo;
-                    showToast(`📸 Código escaneado: ${codigo}`, 'success');
-                    
-                    // Procesar el código
-                    agregarProductoConBusqueda(codigo, 0, true);
-                    
-                    scanBuffer = '';
-                    clearTimeout(scanTimeout);
+                if (scanBuffer.length >= 3) {
+                    procesarCodigoEscaneado(scanBuffer.trim());
                 }
-                e.preventDefault();
+                scanBuffer = '';
+                clearTimeout(scanTimeout);
                 return;
             }
-            
-            // Acumular caracteres (solo números y letras)
-            if (e.key.length === 1 && e.key !== ' ' && e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt') {
+
+            // Acumular caracteres imprimibles
+            if (e.key.length === 1) {
                 scanBuffer += e.key;
                 clearTimeout(scanTimeout);
-                
-                // Timeout para resetear buffer si el escaneo es muy lento
-                scanTimeout = setTimeout(() => {
-                    scanBuffer = '';
-                }, 1000);
+                scanTimeout = setTimeout(() => { scanBuffer = ''; }, 1500);
             }
-            
+        });
+
+        // ===== MÉTODO 2: Captura por input event =====
+        input.addEventListener('input', function(e) {
+            const val = input.value.trim();
+            if (val.length >= 3) {
+                procesarCodigoEscaneado(val);
+                input.value = '';
+            }
+        });
+
+        // ===== MÉTODO 3: Captura por paste =====
+        input.addEventListener('paste', function(e) {
             e.preventDefault();
-        });
-        
-        // Enfocar el input al hacer clic
-        document.addEventListener('click', function() {
-            setTimeout(() => input.focus(), 10);
-        });
-        
-        // Enfocar al cargar
-        setTimeout(() => input.focus(), 100);
-        
-        // Mantener foco en el input
-        document.addEventListener('focusin', function(e) {
-            if (e.target.closest('.modal-overlay') || e.target.closest('.modal-sheet')) {
-                setTimeout(() => input.focus(), 100);
+            const pasted = (e.clipboardData || window.clipboardData).getData('text');
+            if (pasted && pasted.trim().length >= 3) {
+                procesarCodigoEscaneado(pasted.trim());
             }
+            input.value = '';
         });
-        
-        // Manejar cuando el documento pierde el foco
+
+        // Función central de procesamiento
+        function procesarCodigoEscaneado(codigo) {
+            const now = Date.now();
+            if (now - lastScanTime < 800) return; // Anti-doble escaneo
+            lastScanTime = now;
+
+            // Feedback visual
+            const reader = document.getElementById('reader');
+            if (reader) {
+                reader.classList.add('flash');
+                setTimeout(() => reader.classList.remove('flash'), 300);
+            }
+
+            document.getElementById("lastScanned").innerHTML = codigo;
+            showToast(`📸 Código: ${codigo}`, 'success');
+
+            // Agregar producto
+            agregarProductoConBusqueda(codigo, 0, true);
+        }
+
+        // ===== GESTIÓN DE FOCO =====
+        function mantenerFoco() {
+            if (document.querySelector('.modal-overlay.active')) return;
+            if (document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.id !== 'scannerInput') return;
+            input.focus();
+        }
+
+        // Enfocar constantemente
+        setInterval(mantenerFoco, 500);
+        document.addEventListener('click', mantenerFoco);
+        document.addEventListener('touchend', mantenerFoco);
         document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                setTimeout(() => input.focus(), 100);
-            }
+            if (!document.hidden) setTimeout(mantenerFoco, 100);
         });
-        
+
+        // Enfocar al inicio
+        setTimeout(mantenerFoco, 100);
+
         showToast('🔦 Escáner láser listo', 'success');
     }
 
