@@ -4,1004 +4,305 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Sistema Escáner | Honeywell EDA5S + Open Food Facts</title>
-    <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- HTML5 QR Code Library -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
-    </script>
-    <!-- Google Fonts -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         :root {
-            --bg: #000000;
-            --surface: #1c1c1e;
-            --surface-elevated: #2c2c2e;
-            --surface-pressed: #3a3a3c;
-            --separator: #38383a;
-            --label: #8e8e93;
-            --text: #ffffff;
-            --text-secondary: #aeaeb2;
-            --blue: #0a84ff;
-            --blue-pressed: #0066cc;
-            --green: #30d158;
-            --red: #ff453a;
-            --orange: #ff9f0a;
-            --purple: #bf5af2;
-            --radius-sm: 10px;
-            --radius-md: 14px;
-            --radius-lg: 20px;
-            --radius-xl: 28px;
-            --shadow: 0 8px 24px rgba(0,0,0,0.4);
+            --bg: #000000; --surface: #1c1c1e; --surface-elevated: #2c2c2e; --surface-pressed: #3a3a3c;
+            --separator: #38383a; --label: #8e8e93; --text: #ffffff; --text-secondary: #aeaeb2;
+            --blue: #0a84ff; --blue-pressed: #0066cc; --green: #30d158; --red: #ff453a;
+            --orange: #ff9f0a; --purple: #bf5af2; --radius-sm: 10px; --radius-md: 14px;
+            --radius-lg: 20px; --radius-xl: 28px; --shadow: 0 8px 24px rgba(0,0,0,0.4);
         }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-            background: var(--bg);
-            min-height: 100vh;
-            padding: 0;
-            color: var(--text);
+            background: var(--bg); min-height: 100vh; padding: 0; color: var(--text);
             -webkit-font-smoothing: antialiased;
         }
-
-        .safe-area {
-            max-width: 480px;
-            margin: 0 auto;
-            padding: 0 16px 40px 16px;
-        }
-
-        /* Header nativo */
+        .safe-area { max-width: 480px; margin: 0 auto; padding: 0 16px 40px 16px; }
         .header {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: rgba(0,0,0,0.72);
-            backdrop-filter: saturate(180%) blur(20px);
-            -webkit-backdrop-filter: saturate(180%) blur(20px);
-            padding: 52px 16px 12px 16px;
-            border-bottom: 0.5px solid var(--separator);
-            margin: 0 -16px;
+            position: sticky; top: 0; z-index: 100; background: rgba(0,0,0,0.72);
+            backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+            padding: 52px 16px 12px 16px; border-bottom: 0.5px solid var(--separator); margin: 0 -16px;
         }
-
-        .header-inner {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-        }
-
-        .title-section h1 {
-            font-weight: 700;
-            font-size: 1.7rem;
-            letter-spacing: -0.5px;
-            line-height: 1.1;
-        }
-
-        .title-section p {
-            color: var(--label);
-            font-size: 0.8rem;
-            margin-top: 4px;
-            font-weight: 400;
-        }
-
-        .stats-badge {
-            display: flex;
-            gap: 12px;
-        }
-
+        .header-inner { display: flex; justify-content: space-between; align-items: flex-end; }
+        .title-section h1 { font-weight: 700; font-size: 1.7rem; letter-spacing: -0.5px; line-height: 1.1; }
+        .title-section p { color: var(--label); font-size: 0.8rem; margin-top: 4px; font-weight: 400; }
+        .stats-badge { display: flex; gap: 12px; }
         .stat-pill {
-            background: var(--surface);
-            padding: 6px 14px;
-            border-radius: 100px;
-            font-size: 0.75rem;
-            color: var(--label);
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            background: var(--surface); padding: 6px 14px; border-radius: 100px; font-size: 0.75rem;
+            color: var(--label); font-weight: 500; display: flex; align-items: center; gap: 6px;
             border: 0.5px solid var(--separator);
         }
-
-        .stat-pill span {
-            color: var(--blue);
-            font-weight: 700;
-            font-size: 0.9rem;
-        }
-
-        /* Secciones tipo iOS */
-        .section {
-            margin-top: 24px;
-        }
-
+        .stat-pill span { color: var(--blue); font-weight: 700; font-size: 0.9rem; }
+        .section { margin-top: 24px; }
         .section-label {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--label);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-            padding-left: 4px;
+            font-size: 0.8rem; font-weight: 600; color: var(--label); text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 8px; padding-left: 4px;
         }
-
-        /* Panel de cámara */
         .camera-panel {
-            background: var(--surface);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
+            background: var(--surface); border-radius: var(--radius-lg); overflow: hidden;
             border: 0.5px solid var(--separator);
         }
-
-        .camera-header {
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .camera-header h3 {
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: var(--text);
-        }
-
+        .camera-header { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+        .camera-header h3 { font-size: 0.95rem; font-weight: 600; color: var(--text); }
         .btn-cam {
-            background: var(--blue);
-            border: none;
-            padding: 7px 16px;
-            border-radius: 100px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.15s ease;
+            background: var(--blue); border: none; padding: 7px 16px; border-radius: 100px; color: white;
+            font-weight: 600; cursor: pointer; font-size: 0.8rem; transition: all 0.15s ease;
             letter-spacing: -0.2px;
         }
-
-        .btn-cam:active {
-            transform: scale(0.96);
-            background: var(--blue-pressed);
-        }
-
-        #reader {
-            width: 100%;
-            background: #000;
-            min-height: 280px;
-            position: relative;
-        }
-
-        /* Overlay de escaneo */
+        .btn-cam:active { transform: scale(0.96); background: var(--blue-pressed); }
+        #reader { width: 100%; background: #000; min-height: 280px; position: relative; }
         .scan-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 220px;
-            height: 160px;
-            border: 2px solid var(--blue);
-            border-radius: 12px;
-            pointer-events: none;
-            z-index: 10;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 220px; height: 160px; border: 2px solid var(--blue); border-radius: 12px;
+            pointer-events: none; z-index: 10;
         }
-
         .scan-overlay::before, .scan-overlay::after {
-            content: '';
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border-color: var(--blue);
-            border-style: solid;
+            content: ''; position: absolute; width: 20px; height: 20px;
+            border-color: var(--blue); border-style: solid;
         }
-
-        .scan-overlay::before {
-            top: -2px;
-            left: -2px;
-            border-width: 3px 0 0 3px;
-            border-radius: 12px 0 0 0;
-        }
-
-        .scan-overlay::after {
-            bottom: -2px;
-            right: -2px;
-            border-width: 0 3px 3px 0;
-            border-radius: 0 0 12px 0;
-        }
-
+        .scan-overlay::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 12px 0 0 0; }
+        .scan-overlay::after { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 12px 0; }
         .scan-result {
-            background: var(--surface-elevated);
-            padding: 12px 16px;
-            font-family: 'SF Mono', monospace;
-            font-size: 0.85rem;
-            color: var(--label);
-            border-top: 0.5px solid var(--separator);
+            background: var(--surface-elevated); padding: 12px 16px; font-family: 'SF Mono', monospace;
+            font-size: 0.85rem; color: var(--label); border-top: 0.5px solid var(--separator);
         }
-
-        .scan-result span {
-            color: var(--text);
-            font-weight: 600;
-        }
-
-        /* Lista tipo iOS */
+        .scan-result span { color: var(--text); font-weight: 600; }
         .ios-list {
-            background: var(--surface);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
+            background: var(--surface); border-radius: var(--radius-lg); overflow: hidden;
             border: 0.5px solid var(--separator);
         }
-
         .ios-list-item {
-            padding: 14px 16px;
-            border-bottom: 0.5px solid var(--separator);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            transition: background 0.15s;
+            padding: 14px 16px; border-bottom: 0.5px solid var(--separator); display: flex;
+            align-items: center; gap: 12px; transition: background 0.15s;
         }
-
-        .ios-list-item:last-child {
-            border-bottom: none;
-        }
-
-        .ios-list-item:active {
-            background: var(--surface-pressed);
-        }
-
+        .ios-list-item:last-child { border-bottom: none; }
+        .ios-list-item:active { background: var(--surface-pressed); }
         .list-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: var(--surface-elevated);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--blue);
-            font-size: 0.85rem;
-            flex-shrink: 0;
+            width: 32px; height: 32px; border-radius: 8px; background: var(--surface-elevated);
+            display: flex; align-items: center; justify-content: center; color: var(--blue);
+            font-size: 0.85rem; flex-shrink: 0;
         }
-
-        .list-content {
-            flex: 1;
-        }
-
-        .list-title {
-            font-weight: 500;
-            font-size: 0.95rem;
-            color: var(--text);
-        }
-
-        .list-subtitle {
-            font-size: 0.8rem;
-            color: var(--label);
-            margin-top: 2px;
-        }
-
-        .list-value {
-            font-weight: 600;
-            color: var(--blue);
-            font-size: 0.9rem;
-        }
-
-        /* Inputs tipo iOS */
-        .form-group {
-            margin-bottom: 0;
-        }
-
+        .list-content { flex: 1; }
+        .list-title { font-weight: 500; font-size: 0.95rem; color: var(--text); }
+        .list-subtitle { font-size: 0.8rem; color: var(--label); margin-top: 2px; }
+        .list-value { font-weight: 600; color: var(--blue); font-size: 0.9rem; }
+        .form-group { margin-bottom: 0; }
         .form-group label {
-            display: block;
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: var(--label);
-            margin-bottom: 6px;
-            padding-left: 4px;
+            display: block; font-size: 0.75rem; font-weight: 500; color: var(--label);
+            margin-bottom: 6px; padding-left: 4px;
         }
-
         .form-group input {
-            width: 100%;
-            padding: 12px 16px;
-            background: var(--surface);
-            border: 0.5px solid var(--separator);
-            border-radius: var(--radius-md);
-            color: var(--text);
-            font-size: 1rem;
-            font-weight: 400;
-            transition: all 0.15s;
-            -webkit-appearance: none;
+            width: 100%; padding: 12px 16px; background: var(--surface); border: 0.5px solid var(--separator);
+            border-radius: var(--radius-md); color: var(--text); font-size: 1rem; font-weight: 400;
+            transition: all 0.15s; -webkit-appearance: none;
         }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--blue);
-            background: var(--surface-elevated);
-        }
-
-        .form-group input::placeholder {
-            color: var(--label);
-        }
-
-        .quantity-group {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .quantity-group input {
-            flex: 1;
-        }
-
-        .quantity-group span {
-            color: var(--label);
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-
-        /* Botones */
+        .form-group input:focus { outline: none; border-color: var(--blue); background: var(--surface-elevated); }
+        .form-group input::placeholder { color: var(--label); }
+        .quantity-group { display: flex; gap: 8px; align-items: center; }
+        .quantity-group input { flex: 1; }
+        .quantity-group span { color: var(--label); font-size: 0.85rem; font-weight: 500; }
         .btn-primary {
-            background: var(--blue);
-            border: none;
-            padding: 14px 20px;
-            border-radius: var(--radius-md);
-            font-weight: 600;
-            color: white;
-            width: 100%;
-            cursor: pointer;
-            transition: all 0.15s;
-            font-size: 0.95rem;
-            letter-spacing: -0.2px;
-            -webkit-appearance: none;
+            background: var(--blue); border: none; padding: 14px 20px; border-radius: var(--radius-md);
+            font-weight: 600; color: white; width: 100%; cursor: pointer; transition: all 0.15s;
+            font-size: 0.95rem; letter-spacing: -0.2px; -webkit-appearance: none;
         }
-
-        .btn-primary:active {
-            transform: scale(0.97);
-            background: var(--blue-pressed);
-        }
-
+        .btn-primary:active { transform: scale(0.97); background: var(--blue-pressed); }
         .btn-secondary {
-            background: var(--surface-elevated);
-            border: 0.5px solid var(--separator);
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            color: var(--text);
-            cursor: pointer;
-            width: 100%;
-            font-weight: 500;
-            font-size: 0.9rem;
-            transition: all 0.15s;
-            -webkit-appearance: none;
+            background: var(--surface-elevated); border: 0.5px solid var(--separator); padding: 12px 16px;
+            border-radius: var(--radius-md); color: var(--text); cursor: pointer; width: 100%;
+            font-weight: 500; font-size: 0.9rem; transition: all 0.15s; -webkit-appearance: none;
         }
-
-        .btn-secondary:active {
-            background: var(--surface-pressed);
-            transform: scale(0.97);
-        }
-
-        .btn-danger {
-            background: var(--red);
-            color: white;
-        }
-
-        /* Productos */
-        .products-section {
-            margin-top: 24px;
-        }
-
+        .btn-secondary:active { background: var(--surface-pressed); transform: scale(0.97); }
+        .btn-danger { background: var(--red); color: white; }
+        .products-section { margin-top: 24px; }
         .products-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            padding: 0 4px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 12px; padding: 0 4px;
         }
-
         .products-header h3 {
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--label);
-            text-transform: uppercase;
+            font-size: 0.8rem; font-weight: 600; color: var(--label); text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-
         .product-card {
-            background: var(--surface);
-            border-radius: var(--radius-lg);
-            padding: 16px;
-            margin-bottom: 8px;
-            transition: all 0.15s;
-            border: 0.5px solid var(--separator);
-            position: relative;
-            overflow: hidden;
+            background: var(--surface); border-radius: var(--radius-lg); padding: 16px;
+            margin-bottom: 8px; transition: all 0.15s; border: 0.5px solid var(--separator);
+            position: relative; overflow: hidden;
         }
-
         .product-card::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 3px;
-            background: var(--blue);
-            border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+            background: var(--blue); border-radius: var(--radius-lg) 0 0 var(--radius-lg);
         }
-
-        .product-card:active {
-            background: var(--surface-pressed);
-            transform: scale(0.99);
-        }
-
-        .product-info {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .product-main {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .product-details {
-            flex: 1;
-            min-width: 0;
-        }
-
+        .product-card:active { background: var(--surface-pressed); transform: scale(0.99); }
+        .product-info { display: flex; flex-direction: column; gap: 10px; }
+        .product-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+        .product-details { flex: 1; min-width: 0; }
         .product-name {
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--text);
-            margin-bottom: 4px;
-            line-height: 1.3;
-            word-wrap: break-word;
+            font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 4px;
+            line-height: 1.3; word-wrap: break-word;
         }
-
-        .product-name i {
-            color: var(--blue);
-            margin-right: 6px;
-        }
-
-        .product-brand {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-
-        .product-brand i {
-            color: var(--purple);
-            margin-right: 4px;
-        }
-
+        .product-name i { color: var(--blue); margin-right: 6px; }
+        .product-brand { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
+        .product-brand i { color: var(--purple); margin-right: 4px; }
         .product-code {
-            font-family: 'SF Mono', monospace;
-            font-size: 0.75rem;
-            background: var(--surface-elevated);
-            padding: 3px 10px;
-            border-radius: 100px;
-            color: var(--blue);
-            display: inline-block;
-            font-weight: 500;
+            font-family: 'SF Mono', monospace; font-size: 0.75rem; background: var(--surface-elevated);
+            padding: 3px 10px; border-radius: 100px; color: var(--blue); display: inline-block; font-weight: 500;
         }
-
-        .product-meta {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-top: 4px;
-            flex-wrap: wrap;
-        }
-
-        .product-timestamp {
-            font-size: 0.7rem;
-            color: var(--label);
-        }
-
+        .product-meta { display: flex; align-items: center; gap: 12px; margin-top: 4px; flex-wrap: wrap; }
+        .product-timestamp { font-size: 0.7rem; color: var(--label); }
         .product-cajas {
-            font-weight: 700;
-            font-size: 1.2rem;
-            color: var(--green);
-            background: rgba(48, 209, 88, 0.1);
-            padding: 6px 16px;
-            border-radius: 100px;
-            white-space: nowrap;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+            font-weight: 700; font-size: 1.2rem; color: var(--green); background: rgba(48, 209, 88, 0.1);
+            padding: 6px 16px; border-radius: 100px; white-space: nowrap; display: inline-flex;
+            align-items: center; gap: 6px;
         }
-
-        .product-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 8px;
-            justify-content: flex-end;
-        }
-
+        .product-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
         .icon-btn {
-            background: var(--surface-elevated);
-            border: 0.5px solid var(--separator);
-            padding: 8px 14px;
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            color: var(--text-secondary);
-            transition: all 0.15s;
-            font-size: 0.8rem;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-weight: 500;
-            -webkit-appearance: none;
+            background: var(--surface-elevated); border: 0.5px solid var(--separator); padding: 8px 14px;
+            border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); transition: all 0.15s;
+            font-size: 0.8rem; display: flex; align-items: center; gap: 4px; font-weight: 500; -webkit-appearance: none;
         }
-
-        .icon-btn:active {
-            transform: scale(0.95);
-            background: var(--surface-pressed);
-        }
-
-        .icon-btn.danger {
-            color: var(--red);
-        }
-
-        .icon-btn.danger:active {
-            background: rgba(255, 69, 58, 0.15);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 48px 20px;
-            color: var(--label);
-        }
-
-        .empty-state i {
-            font-size: 2.5rem;
-            margin-bottom: 12px;
-            opacity: 0.4;
-        }
-
-        .empty-state p {
-            font-size: 0.9rem;
-        }
-
-        /* Export bar */
-        .export-bar {
-            display: flex;
-            gap: 10px;
-            margin-top: 16px;
-        }
-
-        .export-bar .btn-secondary {
-            flex: 1;
-        }
-
-        /* Toast nativo */
+        .icon-btn:active { transform: scale(0.95); background: var(--surface-pressed); }
+        .icon-btn.danger { color: var(--red); }
+        .icon-btn.danger:active { background: rgba(255, 69, 58, 0.15); }
+        .empty-state { text-align: center; padding: 48px 20px; color: var(--label); }
+        .empty-state i { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+        .empty-state p { font-size: 0.9rem; }
+        .export-bar { display: flex; gap: 10px; margin-top: 16px; }
+        .export-bar .btn-secondary { flex: 1; }
         .toast-msg {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--surface-elevated);
-            color: var(--text);
-            padding: 12px 20px;
-            border-radius: 100px;
-            font-weight: 500;
-            font-size: 0.85rem;
-            z-index: 1000;
-            animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-            box-shadow: var(--shadow);
-            border: 0.5px solid var(--separator);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            white-space: nowrap;
-            max-width: 90vw;
-            text-align: center;
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+            background: var(--surface-elevated); color: var(--text); padding: 12px 20px;
+            border-radius: 100px; font-weight: 500; font-size: 0.85rem; z-index: 1000;
+            animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; box-shadow: var(--shadow);
+            border: 0.5px solid var(--separator); backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); white-space: nowrap; max-width: 90vw; text-align: center;
         }
-
-        .toast-msg.toast-success {
-            border-color: rgba(48, 209, 88, 0.3);
-        }
-
-        .toast-msg.toast-error {
-            border-color: rgba(255, 69, 58, 0.3);
-        }
-
+        .toast-msg.toast-success { border-color: rgba(48, 209, 88, 0.3); }
+        .toast-msg.toast-error { border-color: rgba(255, 69, 58, 0.3); }
         @keyframes slideUp {
             from { transform: translateX(-50%) translateY(100px); opacity: 0; }
             to { transform: translateX(-50%) translateY(0); opacity: 1; }
         }
-
-        /* Spinner */
         .loading-spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255,255,255,0.2);
-            border-radius: 50%;
-            border-top-color: var(--blue);
-            animation: spin 0.6s linear infinite;
-            margin-left: 8px;
+            display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 50%; border-top-color: var(--blue); animation: spin 0.6s linear infinite; margin-left: 8px;
         }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Badge de búsqueda */
+        @keyframes spin { to { transform: rotate(360deg); } }
         .searching-badge {
-            background: var(--blue);
-            padding: 4px 10px;
-            border-radius: 100px;
-            font-size: 0.7rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            color: white;
-            font-weight: 600;
+            background: var(--blue); padding: 4px 10px; border-radius: 100px; font-size: 0.7rem;
+            display: inline-flex; align-items: center; gap: 6px; color: white; font-weight: 600;
         }
-
-        /* Bottom sheet feel */
         .manual-panel {
-            background: var(--surface);
-            border-radius: var(--radius-lg);
-            border: 0.5px solid var(--separator);
-            padding: 16px;
-            margin-top: 16px;
+            background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--separator);
+            padding: 16px; margin-top: 16px;
         }
-
-        .manual-panel h3 {
-            font-size: 0.95rem;
-            font-weight: 600;
-            margin-bottom: 14px;
-            color: var(--text);
-        }
-
-        /* Floating action button style for quick test */
-        .fab-row {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        /* Scrollbar nativa */
-        ::-webkit-scrollbar {
-            width: 0;
-        }
-
-        /* Animaciones de entrada */
+        .manual-panel h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+        .fab-row { display: flex; gap: 10px; margin-top: 10px; }
+        ::-webkit-scrollbar { width: 0; }
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
-        .product-card {
-            animation: fadeInUp 0.3s ease;
-        }
-
-        /* Responsive */
-        @media (min-width: 768px) {
-            .safe-area {
-                max-width: 520px;
-            }
-        }
-
-        /* Scan line animation */
+        .product-card { animation: fadeInUp 0.3s ease; }
+        @media (min-width: 768px) { .safe-area { max-width: 520px; } }
         .scan-line {
-            position: absolute;
-            left: 10%;
-            right: 10%;
-            height: 2px;
+            position: absolute; left: 10%; right: 10%; height: 2px;
             background: linear-gradient(90deg, transparent, var(--blue), transparent);
-            animation: scanMove 2s ease-in-out infinite;
-            z-index: 11;
-            pointer-events: none;
+            animation: scanMove 2s ease-in-out infinite; z-index: 11; pointer-events: none;
         }
-
-        @keyframes scanMove {
-            0%, 100% { top: 20%; opacity: 0; }
-            50% { top: 80%; opacity: 1; }
-        }
-
-        /* ===== MODALES NATIVOS ===== */
+        @keyframes scanMove { 0%, 100% { top: 20%; opacity: 0; } 50% { top: 80%; opacity: 1; } }
         .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 2000;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.25s ease;
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px); z-index: 2000; display: flex; align-items: flex-end;
+            justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
         }
-
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
         .modal-sheet {
-            background: var(--surface);
-            width: 100%;
-            max-width: 480px;
-            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-            padding: 8px 0 24px 0;
-            transform: translateY(100%);
-            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-            max-height: 85vh;
-            overflow-y: auto;
+            background: var(--surface); width: 100%; max-width: 480px;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 8px 0 24px 0;
+            transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: 85vh; overflow-y: auto;
         }
-
-        .modal-overlay.active .modal-sheet {
-            transform: translateY(0);
-        }
-
-        .modal-handle {
-            width: 36px;
-            height: 5px;
-            background: var(--surface-pressed);
-            border-radius: 3px;
-            margin: 0 auto 16px auto;
-        }
-
-        .modal-title {
-            font-size: 1.1rem;
-            font-weight: 700;
-            text-align: center;
-            padding: 0 20px 16px 20px;
-            letter-spacing: -0.3px;
-        }
-
-        .modal-message {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            text-align: center;
-            padding: 0 24px 20px 24px;
-            line-height: 1.5;
-        }
-
-        .modal-actions {
-            padding: 0 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
+        .modal-overlay.active .modal-sheet { transform: translateY(0); }
+        .modal-handle { width: 36px; height: 5px; background: var(--surface-pressed); border-radius: 3px; margin: 0 auto 16px auto; }
+        .modal-title { font-size: 1.1rem; font-weight: 700; text-align: center; padding: 0 20px 16px 20px; letter-spacing: -0.3px; }
+        .modal-message { font-size: 0.9rem; color: var(--text-secondary); text-align: center; padding: 0 24px 20px 24px; line-height: 1.5; }
+        .modal-actions { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
         .modal-btn {
-            width: 100%;
-            padding: 14px;
-            border-radius: var(--radius-md);
-            border: none;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s;
-            -webkit-appearance: none;
-            letter-spacing: -0.2px;
+            width: 100%; padding: 14px; border-radius: var(--radius-md); border: none; font-size: 1rem;
+            font-weight: 600; cursor: pointer; transition: all 0.15s; -webkit-appearance: none; letter-spacing: -0.2px;
         }
-
-        .modal-btn:active {
-            transform: scale(0.97);
-            opacity: 0.8;
-        }
-
-        .modal-btn-primary {
-            background: var(--blue);
-            color: white;
-        }
-
-        .modal-btn-danger {
-            background: var(--red);
-            color: white;
-        }
-
-        .modal-btn-secondary {
-            background: var(--surface-elevated);
-            color: var(--text);
-            border: 0.5px solid var(--separator);
-        }
-
-        .modal-btn-cancel {
-            background: transparent;
-            color: var(--blue);
-            margin-top: 8px;
-        }
-
-        /* Modal de input (editar cantidad) */
-        .modal-input-group {
-            padding: 0 16px 20px 16px;
-        }
-
+        .modal-btn:active { transform: scale(0.97); opacity: 0.8; }
+        .modal-btn-primary { background: var(--blue); color: white; }
+        .modal-btn-danger { background: var(--red); color: white; }
+        .modal-btn-secondary { background: var(--surface-elevated); color: var(--text); border: 0.5px solid var(--separator); }
+        .modal-btn-cancel { background: transparent; color: var(--blue); margin-top: 8px; }
+        .modal-input-group { padding: 0 16px 20px 16px; }
         .modal-input-group input {
-            width: 100%;
-            padding: 14px 16px;
-            background: var(--surface-elevated);
-            border: 0.5px solid var(--separator);
-            border-radius: var(--radius-md);
-            color: var(--text);
-            font-size: 1.3rem;
-            font-weight: 600;
-            text-align: center;
-            -webkit-appearance: none;
+            width: 100%; padding: 14px 16px; background: var(--surface-elevated); border: 0.5px solid var(--separator);
+            border-radius: var(--radius-md); color: var(--text); font-size: 1.3rem; font-weight: 600;
+            text-align: center; -webkit-appearance: none;
         }
-
-        .modal-input-group input:focus {
-            outline: none;
-            border-color: var(--blue);
-        }
-
+        .modal-input-group input:focus { outline: none; border-color: var(--blue); }
         .modal-input-label {
-            font-size: 0.75rem;
-            color: var(--label);
-            text-align: center;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
+            font-size: 0.75rem; color: var(--label); text-align: center; margin-bottom: 8px;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
         }
-
-        /* Modal de escaneo exitoso */
         .scan-success-icon {
-            width: 64px;
-            height: 64px;
-            background: rgba(48, 209, 88, 0.15);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 16px auto;
-            color: var(--green);
-            font-size: 1.8rem;
+            width: 64px; height: 64px; background: rgba(48, 209, 88, 0.15); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;
+            color: var(--green); font-size: 1.8rem;
         }
-
-        .scan-success-icon.error {
-            background: rgba(255, 69, 58, 0.15);
-            color: var(--red);
-        }
-
-        .scan-success-icon.warning {
-            background: rgba(255, 159, 10, 0.15);
-            color: var(--orange);
-        }
-
+        .scan-success-icon.error { background: rgba(255, 69, 58, 0.15); color: var(--red); }
+        .scan-success-icon.warning { background: rgba(255, 159, 10, 0.15); color: var(--orange); }
         .modal-product-info {
-            background: var(--surface-elevated);
-            border-radius: var(--radius-md);
-            padding: 14px;
-            margin: 0 16px 16px 16px;
-            border: 0.5px solid var(--separator);
+            background: var(--surface-elevated); border-radius: var(--radius-md); padding: 14px;
+            margin: 0 16px 16px 16px; border: 0.5px solid var(--separator);
         }
-
-        .modal-product-name {
-            font-weight: 600;
-            font-size: 1rem;
-            color: var(--text);
-            margin-bottom: 4px;
-        }
-
-        .modal-product-code {
-            font-family: 'SF Mono', monospace;
-            font-size: 0.8rem;
-            color: var(--label);
-        }
-
-        /* Stepper para cantidad */
-        .stepper {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 16px;
-            padding: 0 16px 20px 16px;
-        }
-
+        .modal-product-name { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 4px; }
+        .modal-product-code { font-family: 'SF Mono', monospace; font-size: 0.8rem; color: var(--label); }
+        .stepper { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 0 16px 20px 16px; }
         .stepper-btn {
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: var(--surface-elevated);
-            border: 0.5px solid var(--separator);
-            color: var(--blue);
-            font-size: 1.2rem;
-            font-weight: 700;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.15s;
-            -webkit-appearance: none;
+            width: 44px; height: 44px; border-radius: 50%; background: var(--surface-elevated);
+            border: 0.5px solid var(--separator); color: var(--blue); font-size: 1.2rem; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s; -webkit-appearance: none;
         }
-
-        .stepper-btn:active {
-            transform: scale(0.9);
-            background: var(--surface-pressed);
-        }
-
-        .stepper-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--text);
-            min-width: 60px;
-            text-align: center;
-            font-variant-numeric: tabular-nums;
-        }
-
-        /* Estilos para el escáner láser */
+        .stepper-btn:active { transform: scale(0.9); background: var(--surface-pressed); }
+        .stepper-value { font-size: 2rem; font-weight: 700; color: var(--text); min-width: 60px; text-align: center; font-variant-numeric: tabular-nums; }
         .laser-status {
-            display: none;
-            color: var(--green);
-            font-size: 0.75rem;
-            padding: 4px 12px;
-            background: rgba(48, 209, 88, 0.1);
-            border-radius: 100px;
-            align-items: center;
-            gap: 6px;
-            border: 0.5px solid rgba(48, 209, 88, 0.3);
+            display: none; color: var(--green); font-size: 0.75rem; padding: 4px 12px;
+            background: rgba(48, 209, 88, 0.1); border-radius: 100px; align-items: center;
+            gap: 6px; border: 0.5px solid rgba(48, 209, 88, 0.3);
         }
-
-        .laser-status.active {
-            display: inline-flex;
-        }
-
-        .laser-status i {
-            color: var(--green);
-        }
-
-        .scan-feedback {
-            transition: all 0.2s ease;
-        }
-
-        .scan-feedback.flash {
-            border-color: var(--green) !important;
-            box-shadow: 0 0 20px rgba(48, 209, 88, 0.3);
-        }
-
-        /* ===== CORRECCIÓN EDA5S: Input del escáner visible pero oculto ===== */
+        .laser-status.active { display: inline-flex; }
+        .laser-status i { color: var(--green); }
+        .scan-feedback { transition: all 0.2s ease; }
+        .scan-feedback.flash { border-color: var(--green) !important; box-shadow: 0 0 20px rgba(48, 209, 88, 0.3); }
+        
+        /* ===== INPUT EDA5S - SIEMPRE VISIBLE PARA EL SISTEMA ===== */
         #scannerInput {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            opacity: 0;
-            pointer-events: none;
-            z-index: 9999;
-            border: none;
-            padding: 0;
-            margin: 0;
-            font-size: 1px;
-            color: transparent;
-            background: transparent;
+            position: fixed; top: 0; left: 0; width: 100%; height: 2px;
+            opacity: 0; pointer-events: none; z-index: 9999;
+            border: none; padding: 0; margin: 0; font-size: 1px;
+            color: transparent; background: transparent;
         }
-
-        /* Debug panel para ver qué recibe el escáner */
-        .debug-panel {
-            background: var(--surface-elevated);
-            border: 0.5px solid var(--separator);
-            border-radius: var(--radius-md);
-            padding: 10px 14px;
-            margin-top: 8px;
-            font-family: 'SF Mono', monospace;
-            font-size: 0.7rem;
-            color: var(--label);
-            display: none;
+        
+        /* Cantidad rápida inline */
+        .quick-qty-bar {
+            display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
         }
-
-        .debug-panel.active {
-            display: block;
+        .quick-qty-btn {
+            background: var(--surface-elevated); border: 0.5px solid var(--separator);
+            padding: 8px 16px; border-radius: var(--radius-sm); color: var(--text);
+            cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: all 0.15s;
+            -webkit-appearance: none; min-width: 48px; text-align: center;
         }
-
-        .debug-panel .debug-label {
-            color: var(--orange);
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .debug-panel .debug-content {
-            word-break: break-all;
-            line-height: 1.4;
-        }
+        .quick-qty-btn:active { background: var(--blue); transform: scale(0.95); }
+        .quick-qty-btn.selected { background: var(--blue); border-color: var(--blue); }
     </style>
 </head>
 <body>
@@ -1042,11 +343,6 @@
             <div class="scan-result">
                 <i class="fas fa-barcode" style="color:var(--label);margin-right:6px;"></i><span id="lastScanned">Esperando código...</span>
             </div>
-            <!-- Panel de debug para ver qué recibe el escáner -->
-            <div class="debug-panel" id="debugPanel">
-                <div class="debug-label">DEBUG - Últimos caracteres recibidos:</div>
-                <div class="debug-content" id="debugContent">-</div>
-            </div>
         </div>
     </div>
 
@@ -1071,9 +367,6 @@
                 <button class="btn-secondary" id="quickTestBtn">
                     <i class="fas fa-microchip"></i> Ejemplo
                 </button>
-                <button class="btn-secondary" id="debugBtn" style="color:var(--orange);">
-                    <i class="fas fa-bug"></i> Debug
-                </button>
             </div>
         </div>
     </div>
@@ -1095,7 +388,7 @@
     </div>
 </div>
 
-<!-- Input para el escáner Honeywell EDA5S - AHORA VISIBLE PARA EL SISTEMA -->
+<!-- Input para el escáner Honeywell EDA5S -->
 <input type="text" id="scannerInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
 <script>
@@ -1108,15 +401,13 @@
     let scanBuffer = '';
     let scanTimeout = null;
     let lastScanTime = 0;
-    let debugMode = false;
+    let focoInterval = null;
 
     // ===== FUNCIONES PRINCIPALES =====
     function cargarDatos() {
         const stored = localStorage.getItem("productosCajasScanner");
         if (stored) {
-            try {
-                productos = JSON.parse(stored);
-            } catch(e) { productos = {}; }
+            try { productos = JSON.parse(stored); } catch(e) { productos = {}; }
         } else {
             productos = {};
             guardarDatos();
@@ -1149,32 +440,16 @@
             toast.style.opacity = '0';
             toast.style.transition = 'all 0.3s ease';
             setTimeout(() => toast.remove(), 300);
-        }, 2800);
-    }
-
-    function logDebug(msg) {
-        if (!debugMode) return;
-        const debugContent = document.getElementById('debugContent');
-        if (debugContent) {
-            debugContent.innerHTML = msg + '<br>' + debugContent.innerHTML;
-            if (debugContent.innerHTML.length > 500) {
-                debugContent.innerHTML = debugContent.innerHTML.substring(0, 500) + '...';
-            }
-        }
+        }, 2000);
     }
 
     // ===== CONSULTA A OPEN FOOD FACTS =====
     async function buscarProductoEnOpenFood(codigo) {
-        if (productCache[codigo]) {
-            return productCache[codigo];
-        }
-
+        if (productCache[codigo]) return productCache[codigo];
         const url = `https://world.openfoodfacts.org/api/v0/product/${codigo}.json`;
-        
         try {
             const response = await fetch(url);
             const data = await response.json();
-            
             if (data.status === 1 && data.product) {
                 const producto = {
                     nombre: data.product.product_name || "Nombre no disponible",
@@ -1184,25 +459,16 @@
                 productCache[codigo] = producto;
                 return producto;
             } else {
-                return { 
-                    nombre: null, 
-                    marca: null, 
-                    encontrado: false 
-                };
+                return { nombre: null, marca: null, encontrado: false };
             }
         } catch (error) {
-            console.error("Error al consultar Open Food Facts:", error);
-            return { 
-                nombre: null, 
-                marca: null, 
-                encontrado: false, 
-                error: true 
-            };
+            console.error("Error:", error);
+            return { nombre: null, marca: null, encontrado: false, error: true };
         }
     }
 
-    // ===== AGREGAR PRODUCTO =====
-    async function agregarProductoConBusqueda(codigo, cantidadCajas, mostrarPromptCantidad = false) {
+    // ===== AGREGAR PRODUCTO CON CANTIDAD INLINE (sin prompt) =====
+    async function agregarProductoConBusqueda(codigo, cantidadCajas) {
         if (!codigo || codigo.trim() === "") {
             showToast("Código inválido", "error");
             return false;
@@ -1211,22 +477,9 @@
         codigo = codigo.trim();
         let cant = parseInt(cantidadCajas);
         
-        if (isNaN(cant) || cant < 1) {
-            if (mostrarPromptCantidad) {
-                const inputCant = prompt(`📦 Producto: ${codigo}\n¿Cuántas CAJAS deseas agregar?`, "1");
-                if (inputCant === null) return false;
-                cant = parseInt(inputCant);
-                if (isNaN(cant) || cant < 1) {
-                    showToast("Cantidad inválida", "error");
-                    return false;
-                }
-            } else {
-                showToast("La cantidad de cajas debe ser al menos 1", "error");
-                return false;
-            }
-        }
+        if (isNaN(cant) || cant < 1) cant = 1;
         
-        showToast(`🔍 Buscando producto ${codigo}...`, "success");
+        showToast(`🔍 Buscando ${codigo}...`, "success");
         
         const infoProducto = await buscarProductoEnOpenFood(codigo);
         
@@ -1236,52 +489,153 @@
         if (infoProducto.encontrado) {
             nombreProducto = infoProducto.nombre;
             marcaProducto = infoProducto.marca;
-            showToast(`✅ Encontrado: ${nombreProducto}`, "success");
-        } else {
-            showToast(`⚠️ Producto no encontrado en la base de datos.`, "error");
         }
         
         if (productos[codigo]) {
-            const nuevaCant = productos[codigo].cantidadCajas + cant;
-            productos[codigo] = {
-                codigo: codigo,
-                cantidadCajas: nuevaCant,
-                nombre: productos[codigo].nombre || nombreProducto,
-                marca: productos[codigo].marca || marcaProducto,
-                timestamp: new Date().toISOString()
-            };
-            showToast(`📦 Actualizado: +${cant} cajas (total ${nuevaCant})`);
+            // Producto ya existe - mostrar modal para elegir cantidad
+            mostrarModalCantidad(codigo, nombreProducto || productos[codigo].nombre || codigo, productos[codigo].cantidadCajas, true);
+            return true;
         } else {
-            productos[codigo] = {
-                codigo: codigo,
-                cantidadCajas: cant,
-                nombre: nombreProducto,
-                marca: marcaProducto,
-                timestamp: new Date().toISOString()
-            };
-            if (nombreProducto) {
-                showToast(`📦 Nuevo: ${nombreProducto} | ${cant} caja(s)`);
-            } else {
-                showToast(`📦 Nuevo producto: ${codigo} | ${cant} caja(s)`);
-            }
+            // Producto nuevo - mostrar modal para elegir cantidad
+            mostrarModalCantidad(codigo, nombreProducto || codigo, 0, false, nombreProducto, marcaProducto);
+            return true;
         }
-        
-        guardarDatos();
-        renderizarProductos();
-        actualizarEstadisticas();
-        return true;
     }
 
-    // ===== ESCÁNER LÁSER HONEYWELL EDA5S - CORREGIDO =====
-    function initLaserScanner() {
-        const input = document.getElementById('scannerInput');
-        if (!input) {
-            console.error('Input del escáner no encontrado');
-            return;
+    // ===== MODAL DE CANTIDAD INLINE (reemplaza prompt) =====
+    function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombreNuevo, marcaNueva) {
+        const existing = document.querySelector('.modal-overlay');
+        if (existing) existing.remove();
+
+        let cantidad = esExistente ? 1 : 1; // Cantidad a agregar (default 1)
+        let totalMostrado = esExistente ? cantidadActual : 0;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        const titulo = esExistente ? 'Agregar cajas' : 'Nuevo producto';
+        const mensaje = esExistente 
+            ? `Actual: ${cantidadActual} cajas. ¿Cuántas agregar?`
+            : `¿Cuántas cajas de "${nombre}"?`;
+
+        overlay.innerHTML = `
+            <div class="modal-sheet">
+                <div class="modal-handle"></div>
+                <div class="scan-success-icon"><i class="fas fa-cubes"></i></div>
+                <div class="modal-title">${titulo}</div>
+                <div class="modal-message">${mensaje}</div>
+                <div class="modal-product-info">
+                    <div class="modal-product-name">${nombre}</div>
+                    <div class="modal-product-code">${codigo}</div>
+                </div>
+                <div class="modal-input-label">Cajas a ${esExistente ? 'agregar' : 'registrar'}</div>
+                <div class="stepper">
+                    <button class="stepper-btn" id="modalStepDown">−</button>
+                    <div class="stepper-value" id="modalStepValue">${cantidad}</div>
+                    <button class="stepper-btn" id="modalStepUp">+</button>
+                </div>
+                ${esExistente ? `<div style="text-align:center;color:var(--label);font-size:0.8rem;margin-bottom:12px;">Total será: <span style="color:var(--green);font-weight:700;">${cantidadActual + cantidad}</span> cajas</div>` : ''}
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-primary" id="modalConfirm">Confirmar</button>
+                    <button class="modal-btn modal-btn-cancel" id="modalCancel">Cancelar</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        void overlay.offsetWidth;
+        overlay.classList.add('active');
+
+        const valEl = document.getElementById('modalStepValue');
+
+        document.getElementById('modalStepDown').addEventListener('click', () => {
+            if (cantidad > 1) {
+                cantidad--;
+                valEl.textContent = cantidad;
+                if (esExistente) {
+                    overlay.querySelector('.modal-actions').previousElementSibling.querySelector('span').textContent = cantidadActual + cantidad;
+                }
+            }
+        });
+
+        document.getElementById('modalStepUp').addEventListener('click', () => {
+            cantidad++;
+            valEl.textContent = cantidad;
+            if (esExistente) {
+                overlay.querySelector('.modal-actions').previousElementSibling.querySelector('span').textContent = cantidadActual + cantidad;
+            }
+        });
+
+        function cerrarModal() {
+            overlay.classList.remove('active');
+            setTimeout(() => {
+                overlay.remove();
+                enfocarScannerInmediato();
+            }, 300);
         }
 
-        // Forzar que el input esté siempre enfocado
-        function forzarFoco() {
+        document.getElementById('modalConfirm').addEventListener('click', () => {
+            if (esExistente) {
+                productos[codigo].cantidadCajas += cantidad;
+                productos[codigo].timestamp = new Date().toISOString();
+                showToast(`📦 +${cantidad} cajas (total ${productos[codigo].cantidadCajas})`);
+            } else {
+                productos[codigo] = {
+                    codigo: codigo,
+                    cantidadCajas: cantidad,
+                    nombre: nombreNuevo || null,
+                    marca: marcaNueva || null,
+                    timestamp: new Date().toISOString()
+                };
+                showToast(`📦 ${nombre} | ${cantidad} caja(s)`);
+            }
+            guardarDatos();
+            renderizarProductos();
+            actualizarEstadisticas();
+            cerrarModal();
+        });
+
+        document.getElementById('modalCancel').addEventListener('click', cerrarModal);
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) cerrarModal();
+        });
+
+        // Re-enfocar scanner cuando se cierra el modal
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                cerrarModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+    // ===== ENFOCAR SCANNER INMEDIATAMENTE =====
+    function enfocarScannerInmediato() {
+        const input = document.getElementById('scannerInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+            // Doble enfocado para asegurar
+            setTimeout(() => {
+                input.value = '';
+                input.focus();
+            }, 50);
+            setTimeout(() => {
+                input.value = '';
+                input.focus();
+            }, 150);
+        }
+    }
+
+    // ===== ESCÁNER LÁSER HONEYWELL EDA5S =====
+    function initLaserScanner() {
+        const input = document.getElementById('scannerInput');
+        if (!input) return;
+
+        // Función de enfoque ultra-agresiva
+        function mantenerFocoUltra() {
             if (document.querySelector('.modal-overlay.active')) return;
             if (document.activeElement && 
                 document.activeElement.tagName === 'INPUT' && 
@@ -1289,36 +643,29 @@
                 document.activeElement.id !== 'manualCode' &&
                 document.activeElement.id !== 'cajasQuantity') return;
             
+            input.value = '';
             input.focus();
         }
 
-        // ===== MÉTODO 1: Captura por keydown (EDA5S envía keystrokes) =====
+        // ===== CAPTURA POR KEYDOWN =====
         document.addEventListener('keydown', function(e) {
-            // Solo procesar si no estamos en inputs manuales
             if (e.target.id === 'manualCode' || e.target.id === 'cajasQuantity') return;
-            
-            // Ignorar si hay modal abierto
             if (document.querySelector('.modal-overlay.active')) return;
 
-            logDebug(`KEY: key="${e.key}" code="${e.code}" keyCode=${e.keyCode} charCode=${e.charCode}`);
-
-            // Enter = fin de código (EDA5S debe enviar Enter al final)
+            // Enter = fin de código
             if (e.key === 'Enter' || e.keyCode === 13 || e.which === 13) {
                 if (scanBuffer.length >= 3) {
-                    logDebug(`ENTER detectado. Buffer: "${scanBuffer}"`);
-                    procesarCodigoEscaneado(scanBuffer.trim());
-                } else {
-                    logDebug(`Enter ignorado. Buffer corto: "${scanBuffer}"`);
+                    const codigo = scanBuffer.trim();
+                    procesarCodigoEscaneado(codigo);
                 }
                 scanBuffer = '';
                 clearTimeout(scanTimeout);
                 return;
             }
 
-            // Tab también puede ser fin de código en algunos escáneres
+            // Tab también puede ser fin de código
             if (e.key === 'Tab' || e.keyCode === 9) {
                 if (scanBuffer.length >= 3) {
-                    logDebug(`TAB detectado. Buffer: "${scanBuffer}"`);
                     procesarCodigoEscaneado(scanBuffer.trim());
                 }
                 scanBuffer = '';
@@ -1326,52 +673,30 @@
                 return;
             }
 
-            // Acumular caracteres imprimibles (números, letras, símbolos de código de barras)
+            // Acumular caracteres
             if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
                 scanBuffer += e.key;
-                logDebug(`Char acumulado: "${scanBuffer}"`);
                 clearTimeout(scanTimeout);
-                scanTimeout = setTimeout(() => {
-                    logDebug(`Timeout. Buffer descartado: "${scanBuffer}"`);
-                    scanBuffer = '';
-                }, 2000); // 2 segundos para escáneres lentos
+                scanTimeout = setTimeout(() => { scanBuffer = ''; }, 2000);
             }
         });
 
-        // ===== MÉTODO 2: Captura por input event (EDA5S a veces envía todo junto) =====
+        // ===== CAPTURA POR INPUT =====
         input.addEventListener('input', function(e) {
             const val = input.value.trim();
-            logDebug(`INPUT event: "${val}"`);
-            
             if (val.length >= 3) {
-                // Verificar si termina con salto de línea o retorno de carro
                 if (val.endsWith('\n') || val.endsWith('\r')) {
                     const codigo = val.replace(/[\r\n]/g, '').trim();
-                    logDebug(`INPUT con Enter: "${codigo}"`);
                     procesarCodigoEscaneado(codigo);
                     input.value = '';
                 }
             }
         });
 
-        // ===== MÉTODO 3: Captura por beforeinput (más temprano que input) =====
-        input.addEventListener('beforeinput', function(e) {
-            logDebug(`BEFOREINPUT: data="${e.data}" inputType="${e.inputType}"`);
-        });
-
-        // ===== MÉTODO 4: Captura por keypress (legacy pero útil para EDA5S) =====
-        document.addEventListener('keypress', function(e) {
-            if (e.target.id === 'manualCode' || e.target.id === 'cajasQuantity') return;
-            if (document.querySelector('.modal-overlay.active')) return;
-            
-            logDebug(`KEYPRESS: char="${String.fromCharCode(e.charCode)}" charCode=${e.charCode}`);
-        });
-
-        // ===== MÉTODO 5: Captura por paste =====
+        // ===== CAPTURA POR PASTE =====
         input.addEventListener('paste', function(e) {
             e.preventDefault();
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
-            logDebug(`PASTE: "${pasted}"`);
             if (pasted && pasted.trim().length >= 3) {
                 procesarCodigoEscaneado(pasted.trim());
             }
@@ -1381,13 +706,8 @@
         // Función central de procesamiento
         function procesarCodigoEscaneado(codigo) {
             const now = Date.now();
-            if (now - lastScanTime < 800) {
-                logDebug(`Doble escaneo ignorado: "${codigo}"`);
-                return;
-            }
+            if (now - lastScanTime < 600) return; // Anti-doble más rápido
             lastScanTime = now;
-
-            logDebug(`PROCESANDO: "${codigo}"`);
 
             // Feedback visual
             const reader = document.getElementById('reader');
@@ -1399,29 +719,32 @@
             document.getElementById("lastScanned").innerHTML = codigo;
             showToast(`📸 Código: ${codigo}`, 'success');
 
-            // Agregar producto
-            agregarProductoConBusqueda(codigo, 0, true);
+            // Agregar producto (ahora con modal inline, no prompt)
+            agregarProductoConBusqueda(codigo, 1);
         }
 
-        // ===== GESTIÓN DE FOCO AGRESIVA PARA EDA5S =====
-        // Enfocar cada 300ms (más frecuente para EDA5S)
-        setInterval(forzarFoco, 300);
+        // ===== GESTIÓN DE FOCO AGRESIVA =====
+        // Intervalo muy rápido para EDA5S
+        focoInterval = setInterval(mantenerFocoUltra, 200);
         
-        // Enfocar en múltiples eventos
-        document.addEventListener('click', forzarFoco);
-        document.addEventListener('touchend', forzarFoco);
-        document.addEventListener('touchstart', forzarFoco);
+        // Eventos de enfoque
+        document.addEventListener('click', mantenerFocoUltra);
+        document.addEventListener('touchend', mantenerFocoUltra);
+        document.addEventListener('touchstart', mantenerFocoUltra);
         document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) setTimeout(forzarFoco, 50);
+            if (!document.hidden) setTimeout(mantenerFocoUltra, 50);
         });
         
-        // Enfocar cuando se pierde el foco del input
-        input.addEventListener('blur', function() {
-            setTimeout(forzarFoco, 50);
+        // Cuando el input pierde foco, recuperarlo INMEDIATAMENTE
+        input.addEventListener('blur', function(e) {
+            e.preventDefault();
+            setTimeout(mantenerFocoUltra, 10);
+            setTimeout(mantenerFocoUltra, 50);
+            setTimeout(mantenerFocoUltra, 100);
         });
 
         // Enfocar al inicio
-        setTimeout(forzarFoco, 100);
+        setTimeout(mantenerFocoUltra, 100);
 
         showToast('🔦 Escáner EDA5S listo', 'success');
     }
@@ -1435,10 +758,8 @@
             }
             html5QrCode.clear();
         }
-        
         html5QrCode = new Html5Qrcode("reader");
         const config = { fps: 10, qrbox: { width: 250, height: 200 } };
-        
         try {
             await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
             isScanning = true;
@@ -1450,12 +771,9 @@
     
     function onScanSuccess(decodedText, decodedResult) {
         document.getElementById("lastScanned").innerHTML = decodedText;
-        agregarProductoConBusqueda(decodedText, 0, true);
+        agregarProductoConBusqueda(decodedText, 1);
     }
-    
-    function onScanError(errorMessage) {
-        // Silencioso
-    }
+    function onScanError(errorMessage) {}
     
     function detenerScanner() {
         if (html5QrCode && isScanning) {
@@ -1473,9 +791,7 @@
         const cajas = prod.cantidadCajas;
 
         showModal({
-            icon: 'trash',
-            iconType: 'error',
-            title: 'Eliminar producto',
+            icon: 'trash', iconType: 'error', title: 'Eliminar producto',
             message: `¿Eliminar "${nombre}" y sus ${cajas} caja(s)?`,
             actions: [
                 { text: 'Eliminar', type: 'danger', action: () => {
@@ -1484,8 +800,9 @@
                     renderizarProductos();
                     actualizarEstadisticas();
                     showToast("Producto eliminado");
+                    enfocarScannerInmediato();
                 }},
-                { text: 'Cancelar', type: 'cancel' }
+                { text: 'Cancelar', type: 'cancel', action: enfocarScannerInmediato }
             ]
         });
     }
@@ -1496,17 +813,9 @@
         let currentQty = prod.cantidadCajas;
 
         showModal({
-            icon: 'pen',
-            iconType: 'normal',
-            title: 'Editar cantidad',
-            productInfo: {
-                name: prod.nombre || codigo,
-                code: codigo
-            },
-            stepper: {
-                value: currentQty,
-                onChange: (v) => { currentQty = v; }
-            },
+            icon: 'pen', iconType: 'normal', title: 'Editar cantidad',
+            productInfo: { name: prod.nombre || codigo, code: codigo },
+            stepper: { value: currentQty, onChange: (v) => { currentQty = v; } },
             actions: [
                 { text: 'Guardar', type: 'primary', action: () => {
                     if (currentQty === 0) {
@@ -1519,8 +828,9 @@
                         actualizarEstadisticas();
                         showToast(`Cantidad actualizada: ${productos[codigo].nombre || codigo}`);
                     }
+                    enfocarScannerInmediato();
                 }},
-                { text: 'Cancelar', type: 'cancel' }
+                { text: 'Cancelar', type: 'cancel', action: enfocarScannerInmediato }
             ]
         });
     }
@@ -1545,26 +855,18 @@
                     <div class="product-info">
                         <div class="product-main">
                             <div class="product-details">
-                                <div class="product-name">
-                                    <i class="fas fa-tag"></i> ${escapeHtml(displayName)}
-                                </div>
+                                <div class="product-name"><i class="fas fa-tag"></i> ${escapeHtml(displayName)}</div>
                                 ${hasBrand ? `<div class="product-brand"><i class="fas fa-building"></i> ${escapeHtml(displayBrand)}</div>` : ''}
-                                <div class="product-code">
-                                    <i class="fas fa-barcode"></i> ${escapeHtml(prod.codigo)}
-                                </div>
+                                <div class="product-code"><i class="fas fa-barcode"></i> ${escapeHtml(prod.codigo)}</div>
                                 <div class="product-meta">
-                                    <span class="product-timestamp">
-                                        <i class="fas fa-clock"></i> ${new Date(prod.timestamp).toLocaleString()}
-                                    </span>
+                                    <span class="product-timestamp"><i class="fas fa-clock"></i> ${new Date(prod.timestamp).toLocaleString()}</span>
                                 </div>
                             </div>
-                            <div class="product-cajas">
-                                <i class="fas fa-cubes"></i> ${prod.cantidadCajas}
-                            </div>
+                            <div class="product-cajas"><i class="fas fa-cubes"></i> ${prod.cantidadCajas}</div>
                         </div>
                         <div class="product-actions">
-                            <button class="icon-btn edit-qty" data-code="${prod.codigo}" data-qty="${prod.cantidadCajas}" title="Editar cantidad"><i class="fas fa-pen"></i> Editar</button>
-                            <button class="icon-btn danger delete-prod" data-code="${prod.codigo}" title="Eliminar producto"><i class="fas fa-trash"></i> Eliminar</button>
+                            <button class="icon-btn edit-qty" data-code="${prod.codigo}" data-qty="${prod.cantidadCajas}"><i class="fas fa-pen"></i> Editar</button>
+                            <button class="icon-btn danger delete-prod" data-code="${prod.codigo}"><i class="fas fa-trash"></i> Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -1609,33 +911,25 @@
         }
         let csvRows = [["Código", "Nombre Producto", "Marca", "Cantidad Cajas", "Fecha Registro"]];
         for (let prod of productosArray) {
-            csvRows.push([
-                prod.codigo,
-                prod.nombre || "Sin descripción",
-                prod.marca || "N/A",
-                prod.cantidadCajas,
-                new Date(prod.timestamp).toLocaleString()
-            ]);
+            csvRows.push([prod.codigo, prod.nombre || "Sin descripción", prod.marca || "N/A", prod.cantidadCajas, new Date(prod.timestamp).toLocaleString()]);
         }
         const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
         const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.setAttribute("download", `inventario_completo_${new Date().toISOString().slice(0,19)}.csv`);
+        link.setAttribute("download", `inventario_${new Date().toISOString().slice(0,19)}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        showToast("CSV exportado correctamente");
+        showToast("CSV exportado");
     }
 
     // ===== RESET =====
     function resetSistema() {
         showModal({
-            icon: 'exclamation-triangle',
-            iconType: 'warning',
-            title: 'Reiniciar inventario',
+            icon: 'exclamation-triangle', iconType: 'warning', title: 'Reiniciar inventario',
             message: 'Se eliminarán todos los productos y no se podrán recuperar.',
             actions: [
                 { text: 'Reiniciar todo', type: 'danger', action: () => {
@@ -1645,13 +939,14 @@
                     renderizarProductos();
                     actualizarEstadisticas();
                     showToast("Sistema reiniciado");
+                    enfocarScannerInmediato();
                 }},
-                { text: 'Cancelar', type: 'cancel' }
+                { text: 'Cancelar', type: 'cancel', action: enfocarScannerInmediato }
             ]
         });
     }
 
-    // ===== MODALES =====
+    // ===== MODALES GENÉRICOS =====
     function showModal(options) {
         const existing = document.querySelector('.modal-overlay');
         if (existing) existing.remove();
@@ -1661,8 +956,7 @@
 
         let iconHtml = '';
         if (options.icon) {
-            const iconClass = options.iconType === 'error' ? 'error' : 
-                             options.iconType === 'warning' ? 'warning' : '';
+            const iconClass = options.iconType === 'error' ? 'error' : options.iconType === 'warning' ? 'warning' : '';
             iconHtml = `<div class="scan-success-icon ${iconClass}"><i class="fas fa-${options.icon}"></i></div>`;
         }
 
@@ -1715,7 +1009,6 @@
         `;
 
         document.body.appendChild(overlay);
-
         void overlay.offsetWidth;
         overlay.classList.add('active');
 
@@ -1747,18 +1040,19 @@
         });
 
         overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) closeModal();
+            if (e.target === overlay) {
+                closeModal();
+                const cancelAction = options.actions.find(a => a.type === 'cancel');
+                if (cancelAction && cancelAction.action) cancelAction.action();
+            }
         });
 
         function closeModal() {
             overlay.classList.remove('active');
-            setTimeout(() => overlay.remove(), 300);
-            
-            // Re-enfocar el input del escáner
             setTimeout(() => {
-                const scannerInput = document.getElementById('scannerInput');
-                if (scannerInput) scannerInput.focus();
-            }, 350);
+                overlay.remove();
+                enfocarScannerInmediato();
+            }, 300);
         }
 
         const escHandler = (e) => {
@@ -1773,16 +1067,7 @@
     // ===== EVENTOS PRINCIPALES =====
     document.addEventListener("DOMContentLoaded", () => {
         cargarDatos();
-        
-        // Inicializar escáner láser EDA5S
         initLaserScanner();
-        
-        // Botón de debug
-        document.getElementById("debugBtn").addEventListener("click", () => {
-            debugMode = !debugMode;
-            document.getElementById("debugPanel").classList.toggle("active", debugMode);
-            showToast(debugMode ? "Debug activado" : "Debug desactivado");
-        });
         
         // Botón de cámara/escáner
         const startBtn = document.getElementById("startScannerBtn");
@@ -1790,29 +1075,23 @@
             if (isScanning) {
                 detenerScanner();
                 this.innerHTML = '<i class="fas fa-play"></i> Iniciar';
-                showToast('Cámara detenida');
-                
-                // Reactivar escáner láser
                 laserActive = true;
                 document.getElementById('laserStatus').classList.add('active');
-                document.getElementById('scannerInput').focus();
+                enfocarScannerInmediato();
             } else {
-                // Detectar si es Honeywell EDA5S
                 const isHoneywell = navigator.userAgent.includes('Honeywell') || 
                                    navigator.userAgent.includes('Dolphin') ||
                                    navigator.userAgent.includes('EDA5') ||
                                    navigator.userAgent.includes('Scan');
                 
                 if (isHoneywell) {
-                    // Usar escáner láser por defecto en Honeywell
-                    showToast('🔦 Usando escáner láser EDA5S', 'success');
+                    showToast('🔦 Escáner láser activo', 'success');
                     laserActive = true;
                     document.getElementById('laserStatus').classList.add('active');
-                    document.getElementById('scannerInput').focus();
+                    enfocarScannerInmediato();
                     this.innerHTML = '<i class="fas fa-bolt"></i> Escáner';
                 } else {
-                    // Ofrecer opción en otros dispositivos
-                    if (confirm('📷 ¿Usar cámara?\n(Cancelar para usar escáner láser)')) {
+                    if (confirm('📷 ¿Usar cámara?\n(Cancelar para láser)')) {
                         iniciarScanner();
                         this.innerHTML = '<i class="fas fa-stop"></i> Detener';
                         laserActive = false;
@@ -1821,7 +1100,7 @@
                         showToast('🔦 Escáner láser activo', 'success');
                         laserActive = true;
                         document.getElementById('laserStatus').classList.add('active');
-                        document.getElementById('scannerInput').focus();
+                        enfocarScannerInmediato();
                     }
                 }
             }
@@ -1836,24 +1115,27 @@
             const code = manualCode.value.trim();
             const cant = cajasQuantity.value;
             if (code === "") {
-                showToast("Ingresa un código de barras", "error");
+                showToast("Ingresa un código", "error");
                 return;
             }
-            await agregarProductoConBusqueda(code, parseInt(cant), false);
+            await agregarProductoConBusqueda(code, parseInt(cant));
             manualCode.value = "";
-            manualCode.focus();
             cajasQuantity.value = "1";
+            enfocarScannerInmediato();
         });
         
         manualCode.addEventListener("keypress", (e) => {
             if (e.key === "Enter") addManualBtn.click();
         });
         
+        // Cuando se sale de los inputs manuales, volver al scanner
+        manualCode.addEventListener('blur', enfocarScannerInmediato);
+        cajasQuantity.addEventListener('blur', enfocarScannerInmediato);
+        
         // Botón de prueba
         document.getElementById("quickTestBtn").addEventListener("click", () => {
             const testCode = "8412345678901";
-            manualCode.value = testCode;
-            addManualBtn.click();
+            agregarProductoConBusqueda(testCode, 1);
         });
         
         // Exportar y reset
@@ -1862,9 +1144,8 @@
         
         // Limpiar al cerrar
         window.addEventListener("beforeunload", () => {
-            if (html5QrCode && isScanning) {
-                html5QrCode.stop().catch(e=>console.log(e));
-            }
+            if (focoInterval) clearInterval(focoInterval);
+            if (html5QrCode && isScanning) html5QrCode.stop().catch(e=>console.log(e));
         });
     });
 </script>
