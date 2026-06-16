@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Sistema Escáner con Cámara | Open Food Facts API</title>
+    <title>Sistema Escáner | Honeywell + Open Food Facts</title>
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- HTML5 QR Code Library -->
@@ -927,6 +927,45 @@
             font-variant-numeric: tabular-nums;
         }
 
+        /* Estilos para el escáner láser */
+        .laser-status {
+            display: none;
+            color: var(--green);
+            font-size: 0.75rem;
+            padding: 4px 12px;
+            background: rgba(48, 209, 88, 0.1);
+            border-radius: 100px;
+            align-items: center;
+            gap: 6px;
+            border: 0.5px solid rgba(48, 209, 88, 0.3);
+        }
+
+        .laser-status.active {
+            display: inline-flex;
+        }
+
+        .laser-status i {
+            color: var(--green);
+        }
+
+        .scan-feedback {
+            transition: all 0.2s ease;
+        }
+
+        .scan-feedback.flash {
+            border-color: var(--green) !important;
+            box-shadow: 0 0 20px rgba(48, 209, 88, 0.3);
+        }
+
+        #scannerInput {
+            position: fixed;
+            left: -9999px;
+            top: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -935,7 +974,7 @@
         <div class="header-inner">
             <div class="title-section">
                 <h1>Scansoriana</h1>
-                <p>reinventando · Escáner</p>
+                <p>Honeywell · Escáner</p>
             </div>
             <div class="stats-badge">
                 <div class="stat-pill"><i class="fas fa-boxes"></i> <span id="totalProductos">0</span></div>
@@ -948,15 +987,24 @@
         <div class="section-label">Escáner</div>
         <div class="camera-panel">
             <div class="camera-header">
-                <h3><i class="fas fa-video" style="color:var(--blue);margin-right:6px;"></i>En vivo</h3>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h3><i class="fas fa-bolt" style="color:var(--green);margin-right:6px;"></i>Láser</h3>
+                    <span class="laser-status active" id="laserStatus">
+                        <i class="fas fa-circle" style="font-size: 0.5rem;"></i> Activo
+                    </span>
+                </div>
                 <button class="btn-cam" id="startScannerBtn"><i class="fas fa-play"></i> Iniciar</button>
             </div>
-            <div id="reader" style="width:100%; min-height:280px; position:relative;">
+            <div id="reader" style="width:100%; min-height:280px; position:relative;" class="scan-feedback">
                 <div class="scan-overlay"></div>
                 <div class="scan-line"></div>
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5; color: var(--label); text-align: center; pointer-events: none;">
+                    <i class="fas fa-bolt" style="font-size: 2rem; display: block; margin-bottom: 8px; color: var(--green);"></i>
+                    <span style="font-size: 0.85rem; font-weight: 500;">Apunta y escanea</span>
+                </div>
             </div>
             <div class="scan-result">
-                <i class="fas fa-barcode" style="color:var(--label);margin-right:6px;"></i><span id="lastScanned">---</span>
+                <i class="fas fa-barcode" style="color:var(--label);margin-right:6px;"></i><span id="lastScanned">Esperando código...</span>
             </div>
         </div>
     </div>
@@ -1003,16 +1051,21 @@
     </div>
 </div>
 
-<script>
-    // Modelo de datos: ahora incluye nombre y marca
-    let productos = {};
+<!-- Input oculto para el escáner láser -->
+<input type="text" id="scannerInput" autofocus>
 
+<script>
+    // Modelo de datos
+    let productos = {};
     let html5QrCode = null;
     let isScanning = false;
-
-    // Cache local de productos consultados para no repetir llamadas API
     let productCache = {};
+    let laserActive = true;
+    let scanBuffer = '';
+    let scanTimeout = null;
+    let lastScanTime = 0;
 
+    // ===== FUNCIONES PRINCIPALES =====
     function cargarDatos() {
         const stored = localStorage.getItem("productosCajasScanner");
         if (stored) {
@@ -1054,9 +1107,8 @@
         }, 2800);
     }
 
-    // Función para consultar Open Food Facts API
+    // ===== CONSULTA A OPEN FOOD FACTS =====
     async function buscarProductoEnOpenFood(codigo) {
-        // Verificar caché primero
         if (productCache[codigo]) {
             return productCache[codigo];
         }
@@ -1073,7 +1125,6 @@
                     marca: data.product.brands || "Marca no especificada",
                     encontrado: true
                 };
-                // Guardar en caché
                 productCache[codigo] = producto;
                 return producto;
             } else {
@@ -1094,7 +1145,7 @@
         }
     }
 
-    // Función principal para agregar producto con búsqueda automática
+    // ===== AGREGAR PRODUCTO =====
     async function agregarProductoConBusqueda(codigo, cantidadCajas, mostrarPromptCantidad = false) {
         if (!codigo || codigo.trim() === "") {
             showToast("Código inválido", "error");
@@ -1119,10 +1170,8 @@
             }
         }
         
-        // Mostrar indicador de búsqueda
-        showToast(`🔍 Buscando producto ${codigo} en Open Food Facts...`, "success");
+        showToast(`🔍 Buscando producto ${codigo}...`, "success");
         
-        // Buscar en Open Food Facts
         const infoProducto = await buscarProductoEnOpenFood(codigo);
         
         let nombreProducto = null;
@@ -1131,12 +1180,11 @@
         if (infoProducto.encontrado) {
             nombreProducto = infoProducto.nombre;
             marcaProducto = infoProducto.marca;
-            showToast(`✅ Producto encontrado: ${nombreProducto}`, "success");
+            showToast(`✅ Encontrado: ${nombreProducto}`, "success");
         } else {
-            showToast(`⚠️ Producto no encontrado en la base de datos. Se agregará solo el código.`, "error");
+            showToast(`⚠️ Producto no encontrado en la base de datos.`, "error");
         }
         
-        // Agregar o actualizar en el inventario
         if (productos[codigo]) {
             const nuevaCant = productos[codigo].cantidadCajas + cant;
             productos[codigo] = {
@@ -1168,6 +1216,130 @@
         return true;
     }
 
+    // ===== FUNCIONES DEL ESCÁNER LÁSER =====
+    function initLaserScanner() {
+        const input = document.getElementById('scannerInput');
+        if (!input) {
+            console.error('Input del escáner no encontrado');
+            return;
+        }
+
+        input.addEventListener('keydown', function(e) {
+            // Detectar Enter (fin del código de barras)
+            if (e.key === 'Enter') {
+                if (scanBuffer.length > 0) {
+                    const codigo = scanBuffer.trim();
+                    
+                    // Evitar dobles escaneos
+                    const now = Date.now();
+                    if (now - lastScanTime < 500) {
+                        scanBuffer = '';
+                        return;
+                    }
+                    lastScanTime = now;
+                    
+                    // Mostrar feedback visual
+                    const reader = document.getElementById('reader');
+                    if (reader) {
+                        reader.classList.add('flash');
+                        setTimeout(() => {
+                            reader.classList.remove('flash');
+                        }, 300);
+                    }
+                    
+                    document.getElementById("lastScanned").innerHTML = codigo;
+                    showToast(`📸 Código escaneado: ${codigo}`, 'success');
+                    
+                    // Procesar el código
+                    agregarProductoConBusqueda(codigo, 0, true);
+                    
+                    scanBuffer = '';
+                    clearTimeout(scanTimeout);
+                }
+                e.preventDefault();
+                return;
+            }
+            
+            // Acumular caracteres (solo números y letras)
+            if (e.key.length === 1 && e.key !== ' ' && e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt') {
+                scanBuffer += e.key;
+                clearTimeout(scanTimeout);
+                
+                // Timeout para resetear buffer si el escaneo es muy lento
+                scanTimeout = setTimeout(() => {
+                    scanBuffer = '';
+                }, 1000);
+            }
+            
+            e.preventDefault();
+        });
+        
+        // Enfocar el input al hacer clic
+        document.addEventListener('click', function() {
+            setTimeout(() => input.focus(), 10);
+        });
+        
+        // Enfocar al cargar
+        setTimeout(() => input.focus(), 100);
+        
+        // Mantener foco en el input
+        document.addEventListener('focusin', function(e) {
+            if (e.target.closest('.modal-overlay') || e.target.closest('.modal-sheet')) {
+                setTimeout(() => input.focus(), 100);
+            }
+        });
+        
+        // Manejar cuando el documento pierde el foco
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                setTimeout(() => input.focus(), 100);
+            }
+        });
+        
+        showToast('🔦 Escáner láser listo', 'success');
+    }
+
+    // ===== FUNCIONES DE CÁMARA =====
+    async function iniciarScanner() {
+        if (html5QrCode) {
+            if (isScanning) {
+                await html5QrCode.stop();
+                isScanning = false;
+            }
+            html5QrCode.clear();
+        }
+        
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 200 } };
+        
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+            isScanning = true;
+            showToast("📷 Cámara activada", "success");
+        } catch (err) {
+            showToast("No se pudo acceder a la cámara", "error");
+        }
+    }
+    
+    function onScanSuccess(decodedText, decodedResult) {
+        document.getElementById("lastScanned").innerHTML = decodedText;
+        agregarProductoConBusqueda(decodedText, 0, true);
+    }
+    
+    function onScanError(errorMessage) {
+        // Silencioso
+    }
+    
+    function detenerScanner() {
+        if (html5QrCode && isScanning) {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                showToast("Cámara detenida");
+            }).catch(err => console.warn(err));
+        }
+    }
+
+    // ===== MANEJO DE PRODUCTOS =====
     function eliminarProducto(codigo) {
         const prod = productos[codigo];
         const nombre = prod.nombre || codigo;
@@ -1301,47 +1473,7 @@
         });
     }
 
-    // Escáner
-    async function iniciarScanner() {
-        if (html5QrCode) {
-            if (isScanning) {
-                await html5QrCode.stop();
-                isScanning = false;
-            }
-            html5QrCode.clear();
-        }
-        
-        html5QrCode = new Html5Qrcode("reader");
-        const config = { fps: 10, qrbox: { width: 250, height: 200 } };
-        
-        try {
-            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
-            isScanning = true;
-            showToast("Cámara activada - Escanea códigos de barras");
-        } catch (err) {
-            showToast("No se pudo acceder a la cámara", "error");
-        }
-    }
-    
-    function onScanSuccess(decodedText, decodedResult) {
-        document.getElementById("lastScanned").innerHTML = decodedText;
-        // Al escanear, llamar a la función con cantidad solicitada mediante prompt
-        agregarProductoConBusqueda(decodedText, 0, true);
-    }
-    
-    function onScanError(errorMessage) {
-        // Silencioso
-    }
-    
-    function detenerScanner() {
-        if (html5QrCode && isScanning) {
-            html5QrCode.stop().then(() => {
-                isScanning = false;
-                showToast("Cámara detenida");
-            }).catch(err => console.warn(err));
-        }
-    }
-    
+    // ===== EXPORTAR CSV =====
     function exportarCSV() {
         const productosArray = Object.values(productos);
         if (productosArray.length === 0) {
@@ -1370,7 +1502,8 @@
         URL.revokeObjectURL(url);
         showToast("CSV exportado correctamente");
     }
-    
+
+    // ===== RESET =====
     function resetSistema() {
         showModal({
             icon: 'exclamation-triangle',
@@ -1391,61 +1524,8 @@
         });
     }
 
-    // Eventos
-    document.addEventListener("DOMContentLoaded", () => {
-        cargarDatos();
-        
-        const startBtn = document.getElementById("startScannerBtn");
-        startBtn.addEventListener("click", () => {
-            if (isScanning) {
-                detenerScanner();
-                startBtn.innerHTML = '<i class="fas fa-play"></i> Iniciar Cámara';
-            } else {
-                iniciarScanner();
-                startBtn.innerHTML = '<i class="fas fa-stop"></i> Detener Cámara';
-            }
-        });
-        
-        const addManualBtn = document.getElementById("addManualBtn");
-        const manualCode = document.getElementById("manualCode");
-        const cajasQuantity = document.getElementById("cajasQuantity");
-        
-        addManualBtn.addEventListener("click", async () => {
-            const code = manualCode.value.trim();
-            const cant = cajasQuantity.value;
-            if (code === "") {
-                showToast("Ingresa un código de barras", "error");
-                return;
-            }
-            await agregarProductoConBusqueda(code, parseInt(cant), false);
-            manualCode.value = "";
-            manualCode.focus();
-            cajasQuantity.value = "1";
-        });
-        
-        manualCode.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") addManualBtn.click();
-        });
-        
-        document.getElementById("quickTestBtn").addEventListener("click", () => {
-            const testCode = "8412345678901";
-            manualCode.value = testCode;
-            addManualBtn.click();
-        });
-        
-        document.getElementById("exportExcelBtn").addEventListener("click", exportarCSV);
-        document.getElementById("resetAllBtn").addEventListener("click", resetSistema);
-        
-        window.addEventListener("beforeunload", () => {
-            if (html5QrCode && isScanning) {
-                html5QrCode.stop().catch(e=>console.log(e));
-            }
-        });
-    });
-
-    // ===== SISTEMA DE MODALES NATIVOS =====
+    // ===== MODALES =====
     function showModal(options) {
-        // Cerrar modal existente
         const existing = document.querySelector('.modal-overlay');
         if (existing) existing.remove();
 
@@ -1509,11 +1589,9 @@
 
         document.body.appendChild(overlay);
 
-        // Forzar reflow para animación
         void overlay.offsetWidth;
         overlay.classList.add('active');
 
-        // Stepper logic
         if (options.stepper) {
             let currentVal = options.stepper.value;
             const valEl = document.getElementById('modalStepValue');
@@ -1531,7 +1609,6 @@
             });
         }
 
-        // Action handlers
         options.actions.forEach((action, idx) => {
             const btn = overlay.querySelector(`[data-action="${action.type === 'cancel' ? 'cancel' : 'action'}-${idx}"]`);
             if (btn) {
@@ -1542,7 +1619,6 @@
             }
         });
 
-        // Cerrar al tocar overlay
         overlay.addEventListener('click', (e) => {
             if (e.target === overlay) closeModal();
         });
@@ -1550,9 +1626,14 @@
         function closeModal() {
             overlay.classList.remove('active');
             setTimeout(() => overlay.remove(), 300);
+            
+            // Re-enfocar el input del escáner
+            setTimeout(() => {
+                const scannerInput = document.getElementById('scannerInput');
+                if (scannerInput) scannerInput.focus();
+            }, 350);
         }
 
-        // Cerrar con Escape
         const escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
@@ -1562,6 +1643,96 @@
         document.addEventListener('keydown', escHandler);
     }
 
+    // ===== EVENTOS PRINCIPALES =====
+    document.addEventListener("DOMContentLoaded", () => {
+        cargarDatos();
+        
+        // Inicializar escáner láser
+        initLaserScanner();
+        
+        // Botón de cámara/escáner
+        const startBtn = document.getElementById("startScannerBtn");
+        startBtn.addEventListener("click", function() {
+            if (isScanning) {
+                detenerScanner();
+                this.innerHTML = '<i class="fas fa-play"></i> Iniciar';
+                showToast('Cámara detenida');
+                
+                // Reactivar escáner láser
+                laserActive = true;
+                document.getElementById('laserStatus').classList.add('active');
+                document.getElementById('scannerInput').focus();
+            } else {
+                // Detectar si es Honeywell o dispositivo con escáner
+                const isHoneywell = navigator.userAgent.includes('Honeywell') || 
+                                   navigator.userAgent.includes('Dolphin') ||
+                                   navigator.userAgent.includes('CT50') ||
+                                   navigator.userAgent.includes('Scan');
+                
+                if (isHoneywell) {
+                    // Usar escáner láser por defecto en Honeywell
+                    showToast('🔦 Usando escáner láser', 'success');
+                    laserActive = true;
+                    document.getElementById('laserStatus').classList.add('active');
+                    document.getElementById('scannerInput').focus();
+                    this.innerHTML = '<i class="fas fa-bolt"></i> Escáner';
+                } else {
+                    // Ofrecer opción en otros dispositivos
+                    if (confirm('📷 ¿Usar cámara?\n(Cancelar para usar escáner láser)')) {
+                        iniciarScanner();
+                        this.innerHTML = '<i class="fas fa-stop"></i> Detener';
+                        laserActive = false;
+                        document.getElementById('laserStatus').classList.remove('active');
+                    } else {
+                        showToast('🔦 Escáner láser activo', 'success');
+                        laserActive = true;
+                        document.getElementById('laserStatus').classList.add('active');
+                        document.getElementById('scannerInput').focus();
+                    }
+                }
+            }
+        });
+        
+        // Botón manual
+        const addManualBtn = document.getElementById("addManualBtn");
+        const manualCode = document.getElementById("manualCode");
+        const cajasQuantity = document.getElementById("cajasQuantity");
+        
+        addManualBtn.addEventListener("click", async () => {
+            const code = manualCode.value.trim();
+            const cant = cajasQuantity.value;
+            if (code === "") {
+                showToast("Ingresa un código de barras", "error");
+                return;
+            }
+            await agregarProductoConBusqueda(code, parseInt(cant), false);
+            manualCode.value = "";
+            manualCode.focus();
+            cajasQuantity.value = "1";
+        });
+        
+        manualCode.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") addManualBtn.click();
+        });
+        
+        // Botón de prueba
+        document.getElementById("quickTestBtn").addEventListener("click", () => {
+            const testCode = "8412345678901";
+            manualCode.value = testCode;
+            addManualBtn.click();
+        });
+        
+        // Exportar y reset
+        document.getElementById("exportExcelBtn").addEventListener("click", exportarCSV);
+        document.getElementById("resetAllBtn").addEventListener("click", resetSistema);
+        
+        // Limpiar al cerrar
+        window.addEventListener("beforeunload", () => {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().catch(e=>console.log(e));
+            }
+        });
+    });
 </script>
 </body>
 </html>
