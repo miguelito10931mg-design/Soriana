@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Sistema Escáner | Honeywell + Open Food Facts</title>
+    <title>Sistema Escáner | Honeywell EDA5S + Open Food Facts</title>
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- HTML5 QR Code Library -->
@@ -957,20 +957,50 @@
             box-shadow: 0 0 20px rgba(48, 209, 88, 0.3);
         }
 
-        /* ===== CORRECCIÓN: Input del escáner Honeywell ===== */
+        /* ===== CORRECCIÓN EDA5S: Input del escáner visible pero oculto ===== */
         #scannerInput {
             position: fixed;
             top: 0;
             left: 0;
-            width: 1px;
+            width: 100%;
             height: 1px;
-            opacity: 0.01;
+            opacity: 0;
             pointer-events: none;
-            z-index: -1;
+            z-index: 9999;
             border: none;
             padding: 0;
             margin: 0;
             font-size: 1px;
+            color: transparent;
+            background: transparent;
+        }
+
+        /* Debug panel para ver qué recibe el escáner */
+        .debug-panel {
+            background: var(--surface-elevated);
+            border: 0.5px solid var(--separator);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            margin-top: 8px;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--label);
+            display: none;
+        }
+
+        .debug-panel.active {
+            display: block;
+        }
+
+        .debug-panel .debug-label {
+            color: var(--orange);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .debug-panel .debug-content {
+            word-break: break-all;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -980,7 +1010,7 @@
         <div class="header-inner">
             <div class="title-section">
                 <h1>Scansoriana</h1>
-                <p>Honeywell · Escáner</p>
+                <p>Honeywell EDA5S · Escáner</p>
             </div>
             <div class="stats-badge">
                 <div class="stat-pill"><i class="fas fa-boxes"></i> <span id="totalProductos">0</span></div>
@@ -1012,6 +1042,11 @@
             <div class="scan-result">
                 <i class="fas fa-barcode" style="color:var(--label);margin-right:6px;"></i><span id="lastScanned">Esperando código...</span>
             </div>
+            <!-- Panel de debug para ver qué recibe el escáner -->
+            <div class="debug-panel" id="debugPanel">
+                <div class="debug-label">DEBUG - Últimos caracteres recibidos:</div>
+                <div class="debug-content" id="debugContent">-</div>
+            </div>
         </div>
     </div>
 
@@ -1036,6 +1071,9 @@
                 <button class="btn-secondary" id="quickTestBtn">
                     <i class="fas fa-microchip"></i> Ejemplo
                 </button>
+                <button class="btn-secondary" id="debugBtn" style="color:var(--orange);">
+                    <i class="fas fa-bug"></i> Debug
+                </button>
             </div>
         </div>
     </div>
@@ -1057,7 +1095,7 @@
     </div>
 </div>
 
-<!-- Input oculto para el escáner láser Honeywell -->
+<!-- Input para el escáner Honeywell EDA5S - AHORA VISIBLE PARA EL SISTEMA -->
 <input type="text" id="scannerInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 
 <script>
@@ -1070,6 +1108,7 @@
     let scanBuffer = '';
     let scanTimeout = null;
     let lastScanTime = 0;
+    let debugMode = false;
 
     // ===== FUNCIONES PRINCIPALES =====
     function cargarDatos() {
@@ -1111,6 +1150,17 @@
             toast.style.transition = 'all 0.3s ease';
             setTimeout(() => toast.remove(), 300);
         }, 2800);
+    }
+
+    function logDebug(msg) {
+        if (!debugMode) return;
+        const debugContent = document.getElementById('debugContent');
+        if (debugContent) {
+            debugContent.innerHTML = msg + '<br>' + debugContent.innerHTML;
+            if (debugContent.innerHTML.length > 500) {
+                debugContent.innerHTML = debugContent.innerHTML.substring(0, 500) + '...';
+            }
+        }
     }
 
     // ===== CONSULTA A OPEN FOOD FACTS =====
@@ -1222,7 +1272,7 @@
         return true;
     }
 
-    // ===== ESCÁNER LÁSER HONEYWELL - CORREGIDO =====
+    // ===== ESCÁNER LÁSER HONEYWELL EDA5S - CORREGIDO =====
     function initLaserScanner() {
         const input = document.getElementById('scannerInput');
         if (!input) {
@@ -1230,22 +1280,45 @@
             return;
         }
 
-        // ===== MÉTODO 1: Captura por keystrokes =====
-        document.addEventListener('keydown', function(e) {
-            // Ignorar si hay un modal abierto
+        // Forzar que el input esté siempre enfocado
+        function forzarFoco() {
             if (document.querySelector('.modal-overlay.active')) return;
+            if (document.activeElement && 
+                document.activeElement.tagName === 'INPUT' && 
+                document.activeElement.id !== 'scannerInput' &&
+                document.activeElement.id !== 'manualCode' &&
+                document.activeElement.id !== 'cajasQuantity') return;
             
-            // Ignorar si estamos en un input visible (excepto el scannerInput)
-            if (e.target.tagName === 'INPUT' && e.target.id !== 'scannerInput') return;
-            if (e.target.tagName === 'TEXTAREA') return;
-            if (e.target.isContentEditable) return;
+            input.focus();
+        }
 
-            // Ignorar teclas de control
-            if (e.ctrlKey || e.altKey || e.metaKey) return;
+        // ===== MÉTODO 1: Captura por keydown (EDA5S envía keystrokes) =====
+        document.addEventListener('keydown', function(e) {
+            // Solo procesar si no estamos en inputs manuales
+            if (e.target.id === 'manualCode' || e.target.id === 'cajasQuantity') return;
+            
+            // Ignorar si hay modal abierto
+            if (document.querySelector('.modal-overlay.active')) return;
 
-            // Enter = fin de código
-            if (e.key === 'Enter') {
+            logDebug(`KEY: key="${e.key}" code="${e.code}" keyCode=${e.keyCode} charCode=${e.charCode}`);
+
+            // Enter = fin de código (EDA5S debe enviar Enter al final)
+            if (e.key === 'Enter' || e.keyCode === 13 || e.which === 13) {
                 if (scanBuffer.length >= 3) {
+                    logDebug(`ENTER detectado. Buffer: "${scanBuffer}"`);
+                    procesarCodigoEscaneado(scanBuffer.trim());
+                } else {
+                    logDebug(`Enter ignorado. Buffer corto: "${scanBuffer}"`);
+                }
+                scanBuffer = '';
+                clearTimeout(scanTimeout);
+                return;
+            }
+
+            // Tab también puede ser fin de código en algunos escáneres
+            if (e.key === 'Tab' || e.keyCode === 9) {
+                if (scanBuffer.length >= 3) {
+                    logDebug(`TAB detectado. Buffer: "${scanBuffer}"`);
                     procesarCodigoEscaneado(scanBuffer.trim());
                 }
                 scanBuffer = '';
@@ -1253,27 +1326,52 @@
                 return;
             }
 
-            // Acumular caracteres imprimibles
-            if (e.key.length === 1) {
+            // Acumular caracteres imprimibles (números, letras, símbolos de código de barras)
+            if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.altKey && !e.metaKey) {
                 scanBuffer += e.key;
+                logDebug(`Char acumulado: "${scanBuffer}"`);
                 clearTimeout(scanTimeout);
-                scanTimeout = setTimeout(() => { scanBuffer = ''; }, 1500);
+                scanTimeout = setTimeout(() => {
+                    logDebug(`Timeout. Buffer descartado: "${scanBuffer}"`);
+                    scanBuffer = '';
+                }, 2000); // 2 segundos para escáneres lentos
             }
         });
 
-        // ===== MÉTODO 2: Captura por input event =====
+        // ===== MÉTODO 2: Captura por input event (EDA5S a veces envía todo junto) =====
         input.addEventListener('input', function(e) {
             const val = input.value.trim();
+            logDebug(`INPUT event: "${val}"`);
+            
             if (val.length >= 3) {
-                procesarCodigoEscaneado(val);
-                input.value = '';
+                // Verificar si termina con salto de línea o retorno de carro
+                if (val.endsWith('\n') || val.endsWith('\r')) {
+                    const codigo = val.replace(/[\r\n]/g, '').trim();
+                    logDebug(`INPUT con Enter: "${codigo}"`);
+                    procesarCodigoEscaneado(codigo);
+                    input.value = '';
+                }
             }
         });
 
-        // ===== MÉTODO 3: Captura por paste =====
+        // ===== MÉTODO 3: Captura por beforeinput (más temprano que input) =====
+        input.addEventListener('beforeinput', function(e) {
+            logDebug(`BEFOREINPUT: data="${e.data}" inputType="${e.inputType}"`);
+        });
+
+        // ===== MÉTODO 4: Captura por keypress (legacy pero útil para EDA5S) =====
+        document.addEventListener('keypress', function(e) {
+            if (e.target.id === 'manualCode' || e.target.id === 'cajasQuantity') return;
+            if (document.querySelector('.modal-overlay.active')) return;
+            
+            logDebug(`KEYPRESS: char="${String.fromCharCode(e.charCode)}" charCode=${e.charCode}`);
+        });
+
+        // ===== MÉTODO 5: Captura por paste =====
         input.addEventListener('paste', function(e) {
             e.preventDefault();
             const pasted = (e.clipboardData || window.clipboardData).getData('text');
+            logDebug(`PASTE: "${pasted}"`);
             if (pasted && pasted.trim().length >= 3) {
                 procesarCodigoEscaneado(pasted.trim());
             }
@@ -1283,8 +1381,13 @@
         // Función central de procesamiento
         function procesarCodigoEscaneado(codigo) {
             const now = Date.now();
-            if (now - lastScanTime < 800) return; // Anti-doble escaneo
+            if (now - lastScanTime < 800) {
+                logDebug(`Doble escaneo ignorado: "${codigo}"`);
+                return;
+            }
             lastScanTime = now;
+
+            logDebug(`PROCESANDO: "${codigo}"`);
 
             // Feedback visual
             const reader = document.getElementById('reader');
@@ -1300,25 +1403,27 @@
             agregarProductoConBusqueda(codigo, 0, true);
         }
 
-        // ===== GESTIÓN DE FOCO =====
-        function mantenerFoco() {
-            if (document.querySelector('.modal-overlay.active')) return;
-            if (document.activeElement && document.activeElement.tagName === 'INPUT' && document.activeElement.id !== 'scannerInput') return;
-            input.focus();
-        }
-
-        // Enfocar constantemente
-        setInterval(mantenerFoco, 500);
-        document.addEventListener('click', mantenerFoco);
-        document.addEventListener('touchend', mantenerFoco);
+        // ===== GESTIÓN DE FOCO AGRESIVA PARA EDA5S =====
+        // Enfocar cada 300ms (más frecuente para EDA5S)
+        setInterval(forzarFoco, 300);
+        
+        // Enfocar en múltiples eventos
+        document.addEventListener('click', forzarFoco);
+        document.addEventListener('touchend', forzarFoco);
+        document.addEventListener('touchstart', forzarFoco);
         document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) setTimeout(mantenerFoco, 100);
+            if (!document.hidden) setTimeout(forzarFoco, 50);
+        });
+        
+        // Enfocar cuando se pierde el foco del input
+        input.addEventListener('blur', function() {
+            setTimeout(forzarFoco, 50);
         });
 
         // Enfocar al inicio
-        setTimeout(mantenerFoco, 100);
+        setTimeout(forzarFoco, 100);
 
-        showToast('🔦 Escáner láser listo', 'success');
+        showToast('🔦 Escáner EDA5S listo', 'success');
     }
 
     // ===== FUNCIONES DE CÁMARA =====
@@ -1669,8 +1774,15 @@
     document.addEventListener("DOMContentLoaded", () => {
         cargarDatos();
         
-        // Inicializar escáner láser
+        // Inicializar escáner láser EDA5S
         initLaserScanner();
+        
+        // Botón de debug
+        document.getElementById("debugBtn").addEventListener("click", () => {
+            debugMode = !debugMode;
+            document.getElementById("debugPanel").classList.toggle("active", debugMode);
+            showToast(debugMode ? "Debug activado" : "Debug desactivado");
+        });
         
         // Botón de cámara/escáner
         const startBtn = document.getElementById("startScannerBtn");
@@ -1685,15 +1797,15 @@
                 document.getElementById('laserStatus').classList.add('active');
                 document.getElementById('scannerInput').focus();
             } else {
-                // Detectar si es Honeywell o dispositivo con escáner
+                // Detectar si es Honeywell EDA5S
                 const isHoneywell = navigator.userAgent.includes('Honeywell') || 
                                    navigator.userAgent.includes('Dolphin') ||
-                                   navigator.userAgent.includes('CT50') ||
+                                   navigator.userAgent.includes('EDA5') ||
                                    navigator.userAgent.includes('Scan');
                 
                 if (isHoneywell) {
                     // Usar escáner láser por defecto en Honeywell
-                    showToast('🔦 Usando escáner láser', 'success');
+                    showToast('🔦 Usando escáner láser EDA5S', 'success');
                     laserActive = true;
                     document.getElementById('laserStatus').classList.add('active');
                     document.getElementById('scannerInput').focus();
