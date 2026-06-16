@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Sistema Escáner con Cámara | Open Food Facts API</title>
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- HTML5 QR Code Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">
+    // ===== SISTEMA DE MODALES NATIVOS =====
+    function showModal(options) {
+        // Cerrar modal existente
+        const existing = document.querySelector('.modal-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        let iconHtml = '';
+        if (options.icon) {
+            const iconClass = options.iconType === 'error' ? 'error' : 
+                             options.iconType === 'warning' ? 'warning' : '';
+            iconHtml = `<div class="scan-success-icon ${iconClass}"><i class="fas fa-${options.icon}"></i></div>`;
+        }
+
+        let productInfoHtml = '';
+        if (options.productInfo) {
+            productInfoHtml = `
+                <div class="modal-product-info">
+                    <div class="modal-product-name">${escapeHtml(options.productInfo.name)}</div>
+                    <div class="modal-product-code">${escapeHtml(options.productInfo.code)}</div>
+                </div>
+            `;
+        }
+
+        let stepperHtml = '';
+        if (options.stepper) {
+            let val = options.stepper.value;
+            stepperHtml = `
+                <div class="modal-input-label">Cantidad de cajas</div>
+                <div class="stepper">
+                    <button class="stepper-btn" id="modalStepDown">−</button>
+                    <div class="stepper-value" id="modalStepValue">${val}</div>
+                    <button class="stepper-btn" id="modalStepUp">+</button>
+                </div>
+            `;
+        }
+
+        let actionsHtml = '';
+        options.actions.forEach((action, idx) => {
+            if (action.type === 'cancel') {
+                actionsHtml += `<button class="modal-btn modal-btn-cancel" data-action="cancel-${idx}">${action.text}</button>`;
+            } else if (action.type === 'danger') {
+                actionsHtml += `<button class="modal-btn modal-btn-danger" data-action="action-${idx}">${action.text}</button>`;
+            } else {
+                actionsHtml += `<button class="modal-btn modal-btn-primary" data-action="action-${idx}">${action.text}</button>`;
+            }
+        });
+
+        overlay.innerHTML = `
+            <div class="modal-sheet">
+                <div class="modal-handle"></div>
+                ${iconHtml}
+                <div class="modal-title">${options.title}</div>
+                ${options.message ? `<div class="modal-message">${options.message}</div>` : ''}
+                ${productInfoHtml}
+                ${stepperHtml}
+                <div class="modal-actions">
+                    ${actionsHtml}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Forzar reflow para animación
+        void overlay.offsetWidth;
+        overlay.classList.add('active');
+
+        // Stepper logic
+        if (options.stepper) {
+            let currentVal = options.stepper.value;
+            const valEl = document.getElementById('modalStepValue');
+            document.getElementById('modalStepDown').addEventListener('click', () => {
+                if (currentVal > 0) {
+                    currentVal--;
+                    valEl.textContent = currentVal;
+                    options.stepper.onChange(currentVal);
+                }
+            });
+            document.getElementById('modalStepUp').addEventListener('click', () => {
+                currentVal++;
+                valEl.textContent = currentVal;
+                options.stepper.onChange(currentVal);
+            });
+        }
+
+        // Action handlers
+        options.actions.forEach((action, idx) => {
+            const btn = overlay.querySelector(`[data-action="${action.type === 'cancel' ? 'cancel' : 'action'}-${idx}"]`);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    closeModal();
+                    if (action.action) action.action();
+                });
+            }
+        });
+
+        // Cerrar al tocar overlay
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
+
+        function closeModal() {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 300);
+        }
+
+        // Cerrar con Escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+</script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg: #000000;
+            --surface: #1c1c1e;
+            --surface-elevated: #2c2c2e;
+            --surface-pressed: #3a3a3c;
+            --separator: #38383a;
+            --label: #8e8e93;
+            --text: #ffffff;
+            --text-secondary: #aeaeb2;
+            --blue: #0a84ff;
+            --blue-pressed: #0066cc;
+            --green: #30d158;
+            --red: #ff453a;
+            --orange: #ff9f0a;
+            --purple: #bf5af2;
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+            --shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            padding: 0;
+            color: var(--text);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .safe-area {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 0 16px 40px 16px;
+        }
+
+        /* Header nativo */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(0,0,0,0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            padding: 52px 16px 12px 16px;
+            border-bottom: 0.5px solid var(--separator);
+            margin: 0 -16px;
+        }
+
+        .header-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .title-section h1 {
+            font-weight: 700;
+            font-size: 1.7rem;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+        }
+
+        .title-section p {
+            color: var(--label);
+            font-size: 0.8rem;
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        .stats-badge {
+            display: flex;
+            gap: 12px;
+        }
+
+        .stat-pill {
+            background: var(--surface);
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            color: var(--label);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 0.5px solid var(--separator);
+        }
+
+        .stat-pill span {
+            color: var(--blue);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* Secciones tipo iOS */
+        .section {
+            margin-top: 24px;
+        }
+
+        .section-label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--label);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding-left: 4px;
+        }
+
+        /* Panel de cámara */
+        .camera-panel {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 0.5px solid var(--separator);
+        }
+
+        .camera-header {
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .camera-header h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .btn-cam {
+            background: var(--blue);
+            border: none;
+            padding: 7px 16px;
+            border-radius: 100px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.15s ease;
+            letter-spacing: -0.2px;
+        }
+
+        .btn-cam:active {
+            transform: scale(0.96);
+            background: var(--blue-pressed);
+        }
+
+        #reader {
+            width: 100%;
+            background: #000;
+            min-height: 280px;
+            position: relative;
+        }
+
+        /* Overlay de escaneo */
+        .scan-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 220px;
+            height: 160px;
+            border: 2px solid var(--blue);
+            border-radius: 12px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .scan-overlay::before, .scan-overlay::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--blue);
+            border-style: solid;
+        }
+
+        .scan-overlay::before {
+            top: -2px;
+            left: -2px;
+            border-width: 3px 0 0 3px;
+            border-radius: 12px 0 0 0;
+        }
+
+        .scan-overlay::after {
+            bottom: -2px;
+            right: -2px;
+            border-width: 0 3px 3px 0;
+            border-radius: 0 0 12px 0;
+        }
+
+        .scan-result {
+            background: var(--surface-elevated);
+            padding: 12px 16px;
+            font-family: 'SF Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--label);
+            border-top: 0.5px solid var(--separator);
+        }
+
+        .scan-result span {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* Lista tipo iOS */
+        .ios-list {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 0.5px solid var(--separator);
+        }
+
+        .ios-list-item {
+            padding: 14px 16px;
+            border-bottom: 0.5px solid var(--separator);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background 0.15s;
+        }
+
+        .ios-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .ios-list-item:active {
+            background: var(--surface-pressed);
+        }
+
+        .list-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--surface-elevated);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--blue);
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .list-content {
+            flex: 1;
+        }
+
+        .list-title {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: var(--text);
+        }
+
+        .list-subtitle {
+            font-size: 0.8rem;
+            color: var(--label);
+            margin-top: 2px;
+        }
+
+        .list-value {
+            font-weight: 600;
+            color: var(--blue);
+            font-size: 0.9rem;
+        }
+
+        /* Inputs tipo iOS */
+        .form-group {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--label);
+            margin-bottom: 6px;
+            padding-left: 4px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface);
+            border: 0.5px solid var(--separator);
+            border-radius: var(--radius-md);
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 400;
+            transition: all 0.15s;
+            -webkit-appearance: none;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--blue);
+            background: var(--surface-elevated);
+        }
+
+        .form-group input::placeholder {
+            color: var(--label);
+        }
+
+        .quantity-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .quantity-group input {
+            flex: 1;
+        }
+
+        .quantity-group span {
+            color: var(--label);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        /* Botones */
+        .btn-primary {
+            background: var(--blue);
+            border: none;
+            padding: 14px 20px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            color: white;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 0.95rem;
+            letter-spacing: -0.2px;
+            -webkit-appearance: none;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.97);
+            background: var(--blue-pressed);
+        }
+
+        .btn-secondary {
+            background: var(--surface-elevated);
+            border: 0.5px solid var(--separator);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            color: var(--text);
+            cursor: pointer;
+            width: 100%;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: all 0.15s;
+            -webkit-appearance: none;
+        }
+
+        .btn-secondary:active {
+            background: var(--surface-pressed);
+            transform: scale(0.97);
+        }
+
+        .btn-danger {
+            background: var(--red);
+            color: white;
+        }
+
+        /* Productos */
+        .products-section {
+            margin-top: 24px;
+        }
+
+        .products-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding: 0 4px;
+        }
+
+        .products-header h3 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--label);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .product-card {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            transition: all 0.15s;
+            border: 0.5px solid var(--separator);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .product-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--blue);
+            border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+        }
+
+        .product-card:active {
+            background: var(--surface-pressed);
+            transform: scale(0.99);
+        }
+
+        .product-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .product-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .product-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .product-code {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.75rem;
+            background: var(--surface-elevated);
+            padding: 3px 10px;
+            border-radius: 100px;
+            color: var(--blue);
+            display: inline-block;
+            font-weight: 500;
+        }
+
+        .product-brand {
+            font-size: 0.75rem;
+            color: var(--label);
+            margin-top: 4px;
+        }
+
+        .product-cajas {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--green);
+            background: rgba(48, 209, 88, 0.1);
+            padding: 6px 14px;
+            border-radius: 100px;
+            white-space: nowrap;
+        }
+
+        .product-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 0.5px solid var(--separator);
+        }
+
+        .icon-btn {
+            background: var(--surface-elevated);
+            border: 0.5px solid var(--separator);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.15s;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 500;
+            -webkit-appearance: none;
+        }
+
+        .icon-btn:active {
+            transform: scale(0.95);
+            background: var(--surface-pressed);
+        }
+
+        .icon-btn.danger {
+            color: var(--red);
+        }
+
+        .icon-btn.danger:active {
+            background: rgba(255, 69, 58, 0.15);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--label);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* Export bar */
+        .export-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .export-bar .btn-secondary {
+            flex: 1;
+        }
+
+        /* Toast nativo */
+        .toast-msg {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--surface-elevated);
+            color: var(--text);
+            padding: 12px 20px;
+            border-radius: 100px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            z-index: 1000;
+            animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            box-shadow: var(--shadow);
+            border: 0.5px solid var(--separator);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            white-space: nowrap;
+            max-width: 90vw;
+            text-align: center;
+        }
+
+        .toast-msg.toast-success {
+            border-color: rgba(48, 209, 88, 0.3);
+        }
+
+        .toast-msg.toast-error {
+            border-color: rgba(255, 69, 58, 0.3);
+        }
+
+        @keyframes slideUp {
+            from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+
+        /* Spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            border-top-color: var(--blue);
+            animation: spin 0.6s linear infinite;
+            margin-left: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Badge de búsqueda */
+        .searching-badge {
+            background: var(--blue);
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 0.7rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: white;
+            font-weight: 600;
+        }
+
+        /* Bottom sheet feel */
+        .manual-panel {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            border: 0.5px solid var(--separator);
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .manual-panel h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 14px;
+            color: var(--text);
+        }
+
+        /* Floating action button style for quick test */
+        .fab-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        /* Scrollbar nativa */
+        ::-webkit-scrollbar {
+            width: 0;
+        }
+
+        /* Animaciones de entrada */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .product-card {
+            animation: fadeInUp 0.3s ease;
+        }
+
+        /* Responsive */
+        @media (min-width: 768px) {
+            .safe-area {
+                max-width: 520px;
+            }
+        }
+
+        /* Scan line animation */
+        .scan-line {
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--blue), transparent);
+            animation: scanMove 2s ease-in-out infinite;
+            z-index: 11;
+            pointer-events: none;
+        }
+
+        @keyframes scanMove {
+            0%, 100% { top: 20%; opacity: 0; }
+            50% { top: 80%; opacity: 1; }
+        }
+
+        /* ===== MODALES NATIVOS ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-sheet {
+            background: var(--surface);
+            width: 100%;
+            max-width: 480px;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+            padding: 8px 0 24px 0;
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.active .modal-sheet {
+            transform: translateY(0);
+        }
+
+        .modal-handle {
+            width: 36px;
+            height: 5px;
+            background: var(--surface-pressed);
+            border-radius: 3px;
+            margin: 0 auto 16px auto;
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-align: center;
+            padding: 0 20px 16px 20px;
+            letter-spacing: -0.3px;
+        }
+
+        .modal-message {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 0 24px 20px 24px;
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: var(--radius-md);
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            -webkit-appearance: none;
+            letter-spacing: -0.2px;
+        }
+
+        .modal-btn:active {
+            transform: scale(0.97);
+            opacity: 0.8;
+        }
+
+        .modal-btn-primary {
+            background: var(--blue);
+            color: white;
+        }
+
+        .modal-btn-danger {
+            background: var(--red);
+            color: white;
+        }
+
+        .modal-btn-secondary {
+            background: var(--surface-elevated);
+            color: var(--text);
+            border: 0.5px solid var(--separator);
+        }
+
+        .modal-btn-cancel {
+            background: transparent;
+            color: var(--blue);
+            margin-top: 8px;
+        }
+
+        /* Modal de input (editar cantidad) */
+        .modal-input-group {
+            padding: 0 16px 20px 16px;
+        }
+
+        .modal-input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--surface-elevated);
+            border: 0.5px solid var(--separator);
+            border-radius: var(--radius-md);
+            color: var(--text);
+            font-size: 1.3rem;
+            font-weight: 600;
+            text-align: center;
+            -webkit-appearance: none;
+        }
+
+        .modal-input-group input:focus {
+            outline: none;
+            border-color: var(--blue);
+        }
+
+        .modal-input-label {
+            font-size: 0.75rem;
+            color: var(--label);
+            text-align: center;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        /* Modal de escaneo exitoso */
+        .scan-success-icon {
+            width: 64px;
+            height: 64px;
+            background: rgba(48, 209, 88, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px auto;
+            color: var(--green);
+            font-size: 1.8rem;
+        }
+
+        .scan-success-icon.error {
+            background: rgba(255, 69, 58, 0.15);
+            color: var(--red);
+        }
+
+        .scan-success-icon.warning {
+            background: rgba(255, 159, 10, 0.15);
+            color: var(--orange);
+        }
+
+        .modal-product-info {
+            background: var(--surface-elevated);
+            border-radius: var(--radius-md);
+            padding: 14px;
+            margin: 0 16px 16px 16px;
+            border: 0.5px solid var(--separator);
+        }
+
+        .modal-product-name {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .modal-product-code {
+            font-family: 'SF Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--label);
+        }
+
+        /* Stepper para cantidad */
+        .stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 0 16px 20px 16px;
+        }
+
+        .stepper-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--surface-elevated);
+            border: 0.5px solid var(--separator);
+            color: var(--blue);
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            -webkit-appearance: none;
+        }
+
+        .stepper-btn:active {
+            transform: scale(0.9);
+            background: var(--surface-pressed);
+        }
+
+        .stepper-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text);
+            min-width: 60px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+    </style>
+<base target="_blank">
+</head>
+<body>
+<div class="safe-area">
+    <div class="header">
+        <div class="header-inner">
+            <div class="title-section">
+                <h1>Scansoriana</h1>
+                <p>reinventando · Escáner </p>
+            </div>
+            <div class="stats-badge">
+                <div class="stat-pill"><i class="fas fa-boxes"></i> <span id="totalProductos">0</span></div>
+                <div class="stat-pill"><i class="fas fa-cubes"></i> <span id="totalCajasSum">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-label">Escáner</div>
+        <div class="camera-panel">
+            <div class="camera-header">
+                <h3><i class="fas fa-video" style="color:var(--blue);margin-right:6px;"></i>En vivo</h3>
+                <button class="btn-cam" id="startScannerBtn"><i class="fas fa-play"></i> Iniciar</button>
+            </div>
+            <div id="reader" style="width:100%; min-height:280px; position:relative;">
+                <div class="scan-overlay"></div>
+                <div class="scan-line"></div>
+            </div>
+            <div class="scan-result">
+                <i class="fas fa-barcode" style="color:var(--label);margin-right:6px;"></i><span id="lastScanned">---</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-label">Captura manual</div>
+        <div class="manual-panel">
+            <div class="form-group" style="margin-bottom:12px;">
+                <label>Código de barras</label>
+                <input type="text" id="manualCode" placeholder="Ej: 7501234567890" inputmode="numeric">
+            </div>
+            <div class="form-group" style="margin-bottom:14px;">
+                <label>Cantidad de cajas</label>
+                <div class="quantity-group">
+                    <input type="number" id="cajasQuantity" value="1" min="1" step="1" inputmode="numeric">
+                    <span>caja(s)</span>
+                </div>
+            </div>
+            <button class="btn-primary" id="addManualBtn">
+                <i class="fas fa-search"></i> Buscar y agregar
+            </button>
+            <div class="fab-row">
+                <button class="btn-secondary" id="quickTestBtn">
+                    <i class="fas fa-microchip"></i> Ejemplo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="products-section">
+        <div class="products-header">
+            <h3>Inventario</h3>
+            <button class="btn-cam" id="exportExcelBtn" style="background:var(--green);"><i class="fas fa-file-excel"></i> CSV</button>
+        </div>
+        <div id="productsList">
+            <div class="empty-state">
+                <i class="fas fa-qrcode"></i>
+                <p>No hay productos aún</p>
+            </div>
+        </div>
+        <div class="export-bar">
+            <button class="btn-secondary" id="resetAllBtn"><i class="fas fa-trash-alt"></i> Reiniciar todo</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Modelo de datos: ahora incluye nombre y marca
+    let productos = {};
+
+    let html5QrCode = null;
+    let isScanning = false;
+
+    // Cache local de productos consultados para no repetir llamadas API
+    let productCache = {};
+
+    function cargarDatos() {
+        const stored = localStorage.getItem("productosCajasScanner");
+        if (stored) {
+            try {
+                productos = JSON.parse(stored);
+            } catch(e) { productos = {}; }
+        } else {
+            productos = {};
+            guardarDatos();
+        }
+        renderizarProductos();
+        actualizarEstadisticas();
+    }
+
+    function guardarDatos() {
+        localStorage.setItem("productosCajasScanner", JSON.stringify(productos));
+    }
+
+    function actualizarEstadisticas() {
+        const totalProductos = Object.keys(productos).length;
+        const totalCajas = Object.values(productos).reduce((sum, item) => sum + (item.cantidadCajas || 0), 0);
+        document.getElementById("totalProductos").innerText = totalProductos;
+        document.getElementById("totalCajasSum").innerText = totalCajas;
+    }
+
+    function showToast(mensaje, tipo = "success") {
+        const toast = document.createElement("div");
+        toast.className = "toast-msg toast-" + tipo;
+        const icon = tipo === "error" ? "exclamation-circle" : "check-circle";
+        const color = tipo === "error" ? "var(--red)" : "var(--green)";
+        toast.innerHTML = `<i class="fas fa-${icon}" style="color:${color};margin-right:6px;"></i> ${mensaje}`;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = 'none';
+            toast.style.transform = 'translateX(-50%) translateY(100px)';
+            toast.style.opacity = '0';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 2800);
+    }
+
+    // Función para consultar Open Food Facts API
+    async function buscarProductoEnOpenFood(codigo) {
+        // Verificar caché primero
+        if (productCache[codigo]) {
+            return productCache[codigo];
+        }
+
+        const url = `https://world.openfoodfacts.org/api/v0/product/${codigo}.json`;
+        
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.status === 1 && data.product) {
+                const producto = {
+                    nombre: data.product.product_name || "Nombre no disponible",
+                    marca: data.product.brands || "Marca no especificada",
+                    encontrado: true
+                };
+                // Guardar en caché
+                productCache[codigo] = producto;
+                return producto;
+            } else {
+                return { 
+                    nombre: null, 
+                    marca: null, 
+                    encontrado: false 
+                };
+            }
+        } catch (error) {
+            console.error("Error al consultar Open Food Facts:", error);
+            return { 
+                nombre: null, 
+                marca: null, 
+                encontrado: false, 
+                error: true 
+            };
+        }
+    }
+
+    // Función principal para agregar producto con búsqueda automática
+    async function agregarProductoConBusqueda(codigo, cantidadCajas, mostrarPromptCantidad = false) {
+        if (!codigo || codigo.trim() === "") {
+            showToast("Código inválido", "error");
+            return false;
+        }
+        
+        codigo = codigo.trim();
+        let cant = parseInt(cantidadCajas);
+        
+        if (isNaN(cant) || cant < 1) {
+            if (mostrarPromptCantidad) {
+                const inputCant = prompt(`📦 Producto: ${codigo}\n¿Cuántas CAJAS deseas agregar?`, "1");
+                if (inputCant === null) return false;
+                cant = parseInt(inputCant);
+                if (isNaN(cant) || cant < 1) {
+                    showToast("Cantidad inválida", "error");
+                    return false;
+                }
+            } else {
+                showToast("La cantidad de cajas debe ser al menos 1", "error");
+                return false;
+            }
+        }
+        
+        // Mostrar indicador de búsqueda
+        showToast(`🔍 Buscando producto ${codigo} en Open Food Facts...`, "success");
+        
+        // Buscar en Open Food Facts
+        const infoProducto = await buscarProductoEnOpenFood(codigo);
+        
+        let nombreProducto = null;
+        let marcaProducto = null;
+        
+        if (infoProducto.encontrado) {
+            nombreProducto = infoProducto.nombre;
+            marcaProducto = infoProducto.marca;
+            showToast(`✅ Producto encontrado: ${nombreProducto}`, "success");
+        } else {
+            showToast(`⚠️ Producto no encontrado en la base de datos. Se agregará solo el código.`, "error");
+        }
+        
+        // Agregar o actualizar en el inventario
+        if (productos[codigo]) {
+            const nuevaCant = productos[codigo].cantidadCajas + cant;
+            productos[codigo] = {
+                codigo: codigo,
+                cantidadCajas: nuevaCant,
+                nombre: productos[codigo].nombre || nombreProducto,
+                marca: productos[codigo].marca || marcaProducto,
+                timestamp: new Date().toISOString()
+            };
+            showToast(`📦 Actualizado: +${cant} cajas (total ${nuevaCant})`);
+        } else {
+            productos[codigo] = {
+                codigo: codigo,
+                cantidadCajas: cant,
+                nombre: nombreProducto,
+                marca: marcaProducto,
+                timestamp: new Date().toISOString()
+            };
+            if (nombreProducto) {
+                showToast(`📦 Nuevo: ${nombreProducto} | ${cant} caja(s)`);
+            } else {
+                showToast(`📦 Nuevo producto: ${codigo} | ${cant} caja(s)`);
+            }
+        }
+        
+        guardarDatos();
+        renderizarProductos();
+        actualizarEstadisticas();
+        return true;
+    }
+
+    function eliminarProducto(codigo) {
+        const prod = productos[codigo];
+        const nombre = prod.nombre || codigo;
+        const cajas = prod.cantidadCajas;
+
+        showModal({
+            icon: 'trash',
+            iconType: 'error',
+            title: 'Eliminar producto',
+            message: `¿Eliminar "${nombre}" y sus ${cajas} caja(s)?`,
+            actions: [
+                { text: 'Eliminar', type: 'danger', action: () => {
+                    delete productos[codigo];
+                    guardarDatos();
+                    renderizarProductos();
+                    actualizarEstadisticas();
+                    showToast("Producto eliminado");
+                }},
+                { text: 'Cancelar', type: 'cancel' }
+            ]
+        });
+    }
+
+    function editarCantidad(codigo) {
+        if (!productos[codigo]) return;
+        const prod = productos[codigo];
+        let currentQty = prod.cantidadCajas;
+
+        showModal({
+            icon: 'pen',
+            iconType: 'normal',
+            title: 'Editar cantidad',
+            productInfo: {
+                name: prod.nombre || codigo,
+                code: codigo
+            },
+            stepper: {
+                value: currentQty,
+                onChange: (v) => { currentQty = v; }
+            },
+            actions: [
+                { text: 'Guardar', type: 'primary', action: () => {
+                    if (currentQty === 0) {
+                        eliminarProducto(codigo);
+                    } else {
+                        productos[codigo].cantidadCajas = currentQty;
+                        productos[codigo].timestamp = new Date().toISOString();
+                        guardarDatos();
+                        renderizarProductos();
+                        actualizarEstadisticas();
+                        showToast(`Cantidad actualizada: ${productos[codigo].nombre || codigo}`);
+                    }
+                }},
+                { text: 'Cancelar', type: 'cancel' }
+            ]
+        });
+    }
+
+    function renderizarProductos() {
+        const container = document.getElementById("productsList");
+        const productosArray = Object.values(productos).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        if (productosArray.length === 0) {
+            container.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><p>No hay productos registrados</p></div>`;
+            return;
+        }
+
+        let html = '';
+        productosArray.forEach(prod => {
+            const displayName = prod.nombre || "📦 Producto sin descripción";
+            const displayBrand = prod.marca ? ` | ${prod.marca}` : "";
+            
+            html += `
+                <div class="product-card" data-code="${prod.codigo}">
+                    <div class="product-info">
+                        <div class="product-details">
+                            <div class="product-name">
+                                <i class="fas fa-tag"></i> ${escapeHtml(displayName)}${escapeHtml(displayBrand)}
+                            </div>
+                            <div class="product-code">
+                                <i class="fas fa-barcode"></i> ${escapeHtml(prod.codigo)}
+                            </div>
+                            <div class="product-brand">
+                                <i class="fas fa-clock"></i> ${new Date(prod.timestamp).toLocaleString()}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                            <div class="product-cajas">
+                                <i class="fas fa-cubes"></i> ${prod.cantidadCajas} caja(s)
+                            </div>
+                            <div class="product-actions">
+                                <button class="icon-btn edit-qty" data-code="${prod.codigo}" data-qty="${prod.cantidadCajas}" title="Editar cantidad"><i class="fas fa-pen"></i></button>
+                                <button class="icon-btn danger delete-prod" data-code="${prod.codigo}" title="Eliminar producto"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        
+        document.querySelectorAll('.delete-prod').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const code = btn.getAttribute('data-code');
+                if (code) eliminarProducto(code);
+            });
+        });
+        
+        document.querySelectorAll('.edit-qty').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const code = btn.getAttribute('data-code');
+                editarCantidad(code);
+            });
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if(m === '&') return '&amp;';
+            if(m === '<') return '&lt;';
+            if(m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // Escáner
+    async function iniciarScanner() {
+        if (html5QrCode) {
+            if (isScanning) {
+                await html5QrCode.stop();
+                isScanning = false;
+            }
+            html5QrCode.clear();
+        }
+        
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 200 } };
+        
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
+            isScanning = true;
+            showToast("Cámara activada - Escanea códigos de barras");
+        } catch (err) {
+            showToast("No se pudo acceder a la cámara", "error");
+        }
+    }
+    
+    function onScanSuccess(decodedText, decodedResult) {
+        document.getElementById("lastScanned").innerHTML = decodedText;
+        // Al escanear, llamar a la función con cantidad solicitada mediante prompt
+        agregarProductoConBusqueda(decodedText, 0, true);
+    }
+    
+    function onScanError(errorMessage) {
+        // Silencioso
+    }
+    
+    function detenerScanner() {
+        if (html5QrCode && isScanning) {
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                showToast("Cámara detenida");
+            }).catch(err => console.warn(err));
+        }
+    }
+    
+    function exportarCSV() {
+        const productosArray = Object.values(productos);
+        if (productosArray.length === 0) {
+            showToast("No hay datos para exportar", "error");
+            return;
+        }
+        let csvRows = [["Código", "Nombre Producto", "Marca", "Cantidad Cajas", "Fecha Registro"]];
+        for (let prod of productosArray) {
+            csvRows.push([
+                prod.codigo,
+                prod.nombre || "Sin descripción",
+                prod.marca || "N/A",
+                prod.cantidadCajas,
+                new Date(prod.timestamp).toLocaleString()
+            ]);
+        }
+        const csvContent = csvRows.map(row => row.map(cell => `"${cell}"`).join(",")).join("\n");
+        const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.setAttribute("download", `inventario_completo_${new Date().toISOString().slice(0,19)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast("CSV exportado correctamente");
+    }
+    
+    function resetSistema() {
+        showModal({
+            icon: 'exclamation-triangle',
+            iconType: 'warning',
+            title: 'Reiniciar inventario',
+            message: 'Se eliminarán todos los productos y no se podrán recuperar.',
+            actions: [
+                { text: 'Reiniciar todo', type: 'danger', action: () => {
+                    productos = {};
+                    productCache = {};
+                    guardarDatos();
+                    renderizarProductos();
+                    actualizarEstadisticas();
+                    showToast("Sistema reiniciado");
+                }},
+                { text: 'Cancelar', type: 'cancel' }
+            ]
+        });
+    }
+
+    // Eventos
+    document.addEventListener("DOMContentLoaded", () => {
+        cargarDatos();
+        
+        const startBtn = document.getElementById("startScannerBtn");
+        startBtn.addEventListener("click", () => {
+            if (isScanning) {
+                detenerScanner();
+                startBtn.innerHTML = '<i class="fas fa-play"></i> Iniciar Cámara';
+            } else {
+                iniciarScanner();
+                startBtn.innerHTML = '<i class="fas fa-stop"></i> Detener Cámara';
+            }
+        });
+        
+        const addManualBtn = document.getElementById("addManualBtn");
+        const manualCode = document.getElementById("manualCode");
+        const cajasQuantity = document.getElementById("cajasQuantity");
+        
+        addManualBtn.addEventListener("click", async () => {
+            const code = manualCode.value.trim();
+            const cant = cajasQuantity.value;
+            if (code === "") {
+                showToast("Ingresa un código de barras", "error");
+                return;
+            }
+            await agregarProductoConBusqueda(code, parseInt(cant), false);
+            manualCode.value = "";
+            manualCode.focus();
+            cajasQuantity.value = "1";
+        });
+        
+        manualCode.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") addManualBtn.click();
+        });
+        
+        document.getElementById("quickTestBtn").addEventListener("click", () => {
+            const testCode = "8412345678901";
+            manualCode.value = testCode;
+            addManualBtn.click();
+        });
+        
+        document.getElementById("exportExcelBtn").addEventListener("click", exportarCSV);
+        document.getElementById("resetAllBtn").addEventListener("click", resetSistema);
+        
+        window.addEventListener("beforeunload", () => {
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().catch(e=>console.log(e));
+            }
+        });
+    });
+
+    // ===== SISTEMA DE MODALES NATIVOS =====
+    function showModal(options) {
+        // Cerrar modal existente
+        const existing = document.querySelector('.modal-overlay');
+        if (existing) existing.remove();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        let iconHtml = '';
+        if (options.icon) {
+            const iconClass = options.iconType === 'error' ? 'error' : 
+                             options.iconType === 'warning' ? 'warning' : '';
+            iconHtml = `<div class="scan-success-icon ${iconClass}"><i class="fas fa-${options.icon}"></i></div>`;
+        }
+
+        let productInfoHtml = '';
+        if (options.productInfo) {
+            productInfoHtml = `
+                <div class="modal-product-info">
+                    <div class="modal-product-name">${escapeHtml(options.productInfo.name)}</div>
+                    <div class="modal-product-code">${escapeHtml(options.productInfo.code)}</div>
+                </div>
+            `;
+        }
+
+        let stepperHtml = '';
+        if (options.stepper) {
+            let val = options.stepper.value;
+            stepperHtml = `
+                <div class="modal-input-label">Cantidad de cajas</div>
+                <div class="stepper">
+                    <button class="stepper-btn" id="modalStepDown">−</button>
+                    <div class="stepper-value" id="modalStepValue">${val}</div>
+                    <button class="stepper-btn" id="modalStepUp">+</button>
+                </div>
+            `;
+        }
+
+        let actionsHtml = '';
+        options.actions.forEach((action, idx) => {
+            if (action.type === 'cancel') {
+                actionsHtml += `<button class="modal-btn modal-btn-cancel" data-action="cancel-${idx}">${action.text}</button>`;
+            } else if (action.type === 'danger') {
+                actionsHtml += `<button class="modal-btn modal-btn-danger" data-action="action-${idx}">${action.text}</button>`;
+            } else {
+                actionsHtml += `<button class="modal-btn modal-btn-primary" data-action="action-${idx}">${action.text}</button>`;
+            }
+        });
+
+        overlay.innerHTML = `
+            <div class="modal-sheet">
+                <div class="modal-handle"></div>
+                ${iconHtml}
+                <div class="modal-title">${options.title}</div>
+                ${options.message ? `<div class="modal-message">${options.message}</div>` : ''}
+                ${productInfoHtml}
+                ${stepperHtml}
+                <div class="modal-actions">
+                    ${actionsHtml}
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Forzar reflow para animación
+        void overlay.offsetWidth;
+        overlay.classList.add('active');
+
+        // Stepper logic
+        if (options.stepper) {
+            let currentVal = options.stepper.value;
+            const valEl = document.getElementById('modalStepValue');
+            document.getElementById('modalStepDown').addEventListener('click', () => {
+                if (currentVal > 0) {
+                    currentVal--;
+                    valEl.textContent = currentVal;
+                    options.stepper.onChange(currentVal);
+                }
+            });
+            document.getElementById('modalStepUp').addEventListener('click', () => {
+                currentVal++;
+                valEl.textContent = currentVal;
+                options.stepper.onChange(currentVal);
+            });
+        }
+
+        // Action handlers
+        options.actions.forEach((action, idx) => {
+            const btn = overlay.querySelector(`[data-action="${action.type === 'cancel' ? 'cancel' : 'action'}-${idx}"]`);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    closeModal();
+                    if (action.action) action.action();
+                });
+            }
+        });
+
+        // Cerrar al tocar overlay
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
+
+        function closeModal() {
+            overlay.classList.remove('active');
+            setTimeout(() => overlay.remove(), 300);
+        }
+
+        // Cerrar con Escape
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+</script>
+</body>
+</html>
