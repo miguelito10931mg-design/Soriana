@@ -65,6 +65,9 @@ const READER_ORIGINAL_HTML = `
     </div>
 `;
 
+// ===== LISTA DE INPUTS DE USUARIO (para no robar foco) =====
+const USER_INPUTS = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
+
 // ===== FUNCIONES PRINCIPALES =====
 function cargarDatos() {
     const stored = localStorage.getItem("productosCajasScanner");
@@ -439,12 +442,23 @@ function detenerFocoScanner() {
 function reiniciarFocoScanner() {
     if (focoActivo) return;
     focoActivo = true;
-    enfocarScannerInmediato();
+    // Pequeño delay para no interrumpir al usuario si acaba de tocar un input
+    setTimeout(() => enfocarScannerInmediato(), 50);
     focoInterval = setInterval(mantenerFocoUltra, 500);
 }
 
 function enfocarScannerInmediato() {
     const input = document.getElementById('scannerInput');
+    const activeEl = document.activeElement;
+
+    // No robar el foco si el usuario está escribiendo en un input propio
+    if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
+        return;
+    }
+    if (activeEl && activeEl.tagName === 'TEXTAREA') {
+        return;
+    }
+
     if (input && !modalAbierto && !settingsAbierto && focoActivo) {
         input.value = '';
         input.focus();
@@ -453,11 +467,11 @@ function enfocarScannerInmediato() {
 
 function mantenerFocoUltra() {
     const activeEl = document.activeElement;
-    const userInputs = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
 
     if (modalAbierto || settingsAbierto) return;
 
-    if (activeEl && activeEl.tagName === 'INPUT' && userInputs.includes(activeEl.id)) {
+    // No robar el foco si el usuario está escribiendo en un input propio
+    if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
         return;
     }
 
@@ -476,8 +490,6 @@ function mantenerFocoUltra() {
 function initLaserScanner() {
     const input = document.getElementById('scannerInput');
     if (!input) return;
-
-    const USER_INPUTS = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
 
     document.addEventListener('keydown', function(e) {
         if (e.target && USER_INPUTS.includes(e.target.id)) return;
@@ -589,6 +601,15 @@ function initLaserScanner() {
     input.addEventListener('blur', function(e) {
         if (modalAbierto || settingsAbierto) return;
         const activeEl = document.activeElement;
+
+        // Si el usuario fue a un input propio, no reenfocar
+        if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
+            return;
+        }
+        if (activeEl && activeEl.tagName === 'TEXTAREA') {
+            return;
+        }
+
         if (!activeEl || (activeEl.tagName !== 'INPUT' && activeEl.tagName !== 'TEXTAREA')) {
             setTimeout(enfocarScannerInmediato, 100);
         }
@@ -1661,13 +1682,46 @@ document.addEventListener("DOMContentLoaded", async () => {
             await agregarProductoConBusqueda(code, parseInt(cant));
             manualCode.value = "";
             cajasQuantity.value = "1";
-            reiniciarFocoScanner();
+            // Mantener el foco en el input para seguir capturando
+            manualCode.focus();
         });
     }
 
     if (manualCode) {
         manualCode.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") addManualBtn.click();
+            if (e.key === "Enter") {
+                e.preventDefault();
+                addManualBtn.click();
+            }
+        });
+
+        // Detener el foco automático mientras el usuario escribe
+        manualCode.addEventListener("focus", () => {
+            detenerFocoScanner();
+        });
+        manualCode.addEventListener("blur", () => {
+            const otros = ['cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
+            const activeEl = document.activeElement;
+            if (!activeEl || !otros.includes(activeEl.id)) {
+                setTimeout(() => {
+                    if (!modalAbierto && !settingsAbierto) reiniciarFocoScanner();
+                }, 150);
+            }
+        });
+    }
+
+    if (cajasQuantity) {
+        cajasQuantity.addEventListener("focus", () => {
+            detenerFocoScanner();
+        });
+        cajasQuantity.addEventListener("blur", () => {
+            const otros = ['manualCode', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
+            const activeEl = document.activeElement;
+            if (!activeEl || !otros.includes(activeEl.id)) {
+                setTimeout(() => {
+                    if (!modalAbierto && !settingsAbierto) reiniciarFocoScanner();
+                }, 150);
+            }
         });
     }
 
