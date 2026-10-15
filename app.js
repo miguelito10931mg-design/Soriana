@@ -52,7 +52,7 @@ let settingsAbierto = false;
 let scanProcessing = false;
 
 // ===== SESIÓN DE TARIMA ACTIVA =====
-let tarimaActiva = null;         // { id: 'TAR-001', inicio, escaneos: { codigo: {cajas, piezas, nombre} } }
+let tarimaActiva = null;
 
 const READER_ORIGINAL_HTML = `
     <div class="scan-overlay"></div>
@@ -64,9 +64,6 @@ const READER_ORIGINAL_HTML = `
         <p>Apunta y escanea</p>
     </div>
 `;
-
-// ===== LISTA DE INPUTS DE USUARIO (para no robar foco) =====
-const USER_INPUTS = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
 
 // ===== FUNCIONES PRINCIPALES =====
 function cargarDatos() {
@@ -126,7 +123,6 @@ async function fetchConTimeout(url, ms = 6000) {
 async function buscarProducto(codigo) {
     await database.esperarInicializacion();
 
-    // 1️⃣ PRIORIDAD: Catálogo local de códigos (con material)
     if (window.catalogs) {
         const enCatalogo = window.catalogs.buscar(codigo);
         if (enCatalogo) {
@@ -143,7 +139,6 @@ async function buscarProducto(codigo) {
         }
     }
 
-    // 2️⃣ Base de datos SQLite
     const productoLocal = database.buscarProducto(codigo);
     if (productoLocal) {
         console.log('✅ Producto encontrado en DB local:', productoLocal);
@@ -156,11 +151,9 @@ async function buscarProducto(codigo) {
         };
     }
 
-    // 3️⃣ Cache
     const cached = cacheGet(codigo);
     if (cached) return cached;
 
-    // 4️⃣ OpenFoodFacts (último recurso)
     const url = `https://world.openfoodfacts.org/api/v0/product/${codigo}.json`;
     try {
         const response = await fetchConTimeout(url, 6000);
@@ -222,25 +215,7 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
         nombreProducto = `Producto ${codigo}`;
     }
 
-    // ===== SI HAY TARIMA ACTIVA: sumar al buffer, sin modal =====
-    if (tarimaActiva) {
-        if (!tarimaActiva.escaneos[codigo]) {
-            tarimaActiva.escaneos[codigo] = {
-                cajas: 0,
-                piezas: 0,
-                nombre: nombreProducto || codigo,
-                material: materialProducto,
-                materialNombre: materialNombreProducto
-            };
-        }
-        tarimaActiva.escaneos[codigo].cajas += cant;
-        actualizarBannerTarima();
-        const total = tarimaActiva.escaneos[codigo].cajas;
-        showToast(`📦 ${nombreProducto} → ${tarimaActiva.id} (${total} cajas)`);
-        return true;
-    }
-
-    // ===== FLUJO NORMAL SIN TARIMA =====
+    // SIEMPRE mostrar modal de cantidad (con o sin tarima activa)
     if (productos[codigo]) {
         mostrarModalCantidad(
             codigo,
@@ -270,7 +245,7 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
     }
 }
 
-// ===== MODAL DE CANTIDAD (con material destacado) =====
+// ===== MODAL DE CANTIDAD (con material destacado + tarima) =====
 function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombreNuevo, marcaNueva, materialNuevo, materialNombreNuevo, matchPuntaje) {
     modalAbierto = true;
     detenerFocoScanner();
@@ -314,12 +289,23 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                <span style="color:var(--orange);font-size:0.8rem;">⚠️ Sin material asignado</span>
            </div>`;
 
+    // Badge de tarima activa (si la hay)
+    const tarimaBadge = tarimaActiva
+        ? `<div style="display:flex;justify-content:center;margin-bottom:10px;">
+               <span style="background:rgba(10,132,255,0.15);color:var(--blue-bright);padding:4px 12px;border-radius:100px;font-size:0.72rem;font-weight:700;letter-spacing:0.4px;">
+                   <i class="fas fa-pallet"></i> ${escapeHtml(tarimaActiva.id)}
+               </span>
+           </div>`
+        : '';
+
     overlay.innerHTML = `
         <div class="modal-sheet">
             <div class="modal-handle"></div>
             <div class="scan-success-icon"><i class="fas fa-cubes"></i></div>
             <div class="modal-title">${escapeHtml(titulo)}</div>
             <div class="modal-message">${escapeHtml(mensaje)}</div>
+
+            ${tarimaBadge}
 
             <div class="modal-product-info">
                 ${materialHtml}
@@ -384,6 +370,7 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
     }
 
     document.getElementById('modalConfirm').addEventListener('click', () => {
+        // ===== 1) Sumar al inventario global =====
         if (esExistente) {
             productos[codigo].cantidadCajas += cantidad;
             productos[codigo].timestamp = new Date().toISOString();
@@ -392,7 +379,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 productos[codigo].materialNombre = materialNombreMostrar;
                 productos[codigo].matchPuntaje = puntajeMostrar;
             }
-            showToast(`📦 +${cantidad} cajas (total ${productos[codigo].cantidadCajas})`);
         } else {
             productos[codigo] = {
                 codigo: codigo,
@@ -404,9 +390,33 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 matchPuntaje: puntajeMostrar || null,
                 timestamp: new Date().toISOString()
             };
-            const matMsg = materialMostrar ? ` · Mat ${materialMostrar}` : '';
-            showToast(`📦 ${nombre}${matMsg} | ${cantidad} caja(s)`);
         }
+
+        // ===== 2) Si hay tarima activa, sumar también al buffer y marcar =====
+        if (tarimaActiva) {
+            if (!tarimaActiva.escaneos[codigo]) {
+                tarimaActiva.escaneos[codigo] = {
+                    cajas: 0,
+                    piezas: 0,
+                    nombre: nombre,
+                    material: materialMostrar,
+                    materialNombre: materialNombreMostrar
+                };
+            }
+            tarimaActiva.escaneos[codigo].cajas += cantidad;
+            productos[codigo].tarima = tarimaActiva.id;
+
+            actualizarBannerTarima();
+            showToast(`📦 +${cantidad} → ${tarimaActiva.id} (${productos[codigo].cantidadCajas} total)`);
+        } else {
+            if (esExistente) {
+                showToast(`📦 +${cantidad} cajas (total ${productos[codigo].cantidadCajas})`);
+            } else {
+                const matMsg = materialMostrar ? ` · Mat ${materialMostrar}` : '';
+                showToast(`📦 ${nombre}${matMsg} | ${cantidad} caja(s)`);
+            }
+        }
+
         guardarDatos();
         renderizarProductos();
         actualizarEstadisticas();
@@ -442,23 +452,12 @@ function detenerFocoScanner() {
 function reiniciarFocoScanner() {
     if (focoActivo) return;
     focoActivo = true;
-    // Pequeño delay para no interrumpir al usuario si acaba de tocar un input
-    setTimeout(() => enfocarScannerInmediato(), 50);
+    enfocarScannerInmediato();
     focoInterval = setInterval(mantenerFocoUltra, 500);
 }
 
 function enfocarScannerInmediato() {
     const input = document.getElementById('scannerInput');
-    const activeEl = document.activeElement;
-
-    // No robar el foco si el usuario está escribiendo en un input propio
-    if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
-        return;
-    }
-    if (activeEl && activeEl.tagName === 'TEXTAREA') {
-        return;
-    }
-
     if (input && !modalAbierto && !settingsAbierto && focoActivo) {
         input.value = '';
         input.focus();
@@ -467,11 +466,11 @@ function enfocarScannerInmediato() {
 
 function mantenerFocoUltra() {
     const activeEl = document.activeElement;
+    const userInputs = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
 
     if (modalAbierto || settingsAbierto) return;
 
-    // No robar el foco si el usuario está escribiendo en un input propio
-    if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
+    if (activeEl && activeEl.tagName === 'INPUT' && userInputs.includes(activeEl.id)) {
         return;
     }
 
@@ -490,6 +489,8 @@ function mantenerFocoUltra() {
 function initLaserScanner() {
     const input = document.getElementById('scannerInput');
     if (!input) return;
+
+    const USER_INPUTS = ['manualCode', 'cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
 
     document.addEventListener('keydown', function(e) {
         if (e.target && USER_INPUTS.includes(e.target.id)) return;
@@ -601,15 +602,6 @@ function initLaserScanner() {
     input.addEventListener('blur', function(e) {
         if (modalAbierto || settingsAbierto) return;
         const activeEl = document.activeElement;
-
-        // Si el usuario fue a un input propio, no reenfocar
-        if (activeEl && activeEl.tagName === 'INPUT' && USER_INPUTS.includes(activeEl.id)) {
-            return;
-        }
-        if (activeEl && activeEl.tagName === 'TEXTAREA') {
-            return;
-        }
-
         if (!activeEl || (activeEl.tagName !== 'INPUT' && activeEl.tagName !== 'TEXTAREA')) {
             setTimeout(enfocarScannerInmediato, 100);
         }
@@ -800,15 +792,30 @@ function iniciarTarima(idTarima) {
 
 function cancelarTarima() {
     if (!tarimaActiva) return;
+
+    const nSKUs = Object.keys(tarimaActiva.escaneos).length;
     showModal({
         icon: 'exclamation-triangle', iconType: 'warning',
         title: 'Cancelar tarima',
-        message: `Se descartarán ${Object.keys(tarimaActiva.escaneos).length} escaneos no validados.`,
+        message: `Se quitarán del inventario las ${nSKUs} líneas escaneadas en esta tarima.`,
         actions: [
-            { text: 'Descartar', type: 'danger', action: () => {
+            { text: 'Cancelar tarima', type: 'danger', action: () => {
+                for (const [cod, item] of Object.entries(tarimaActiva.escaneos)) {
+                    if (productos[cod]) {
+                        productos[cod].cantidadCajas -= item.cajas;
+                        if (productos[cod].cantidadCajas <= 0) {
+                            delete productos[cod];
+                        } else if (productos[cod].tarima === tarimaActiva.id) {
+                            delete productos[cod].tarima;
+                        }
+                    }
+                }
+                guardarDatos();
+                renderizarProductos();
+                actualizarEstadisticas();
                 tarimaActiva = null;
                 actualizarBannerTarima();
-                showToast('Sesión de tarima cancelada', 'warning');
+                showToast('Tarima cancelada y revertida', 'warning');
             }},
             { text: 'Volver', type: 'cancel' }
         ]
@@ -816,48 +823,57 @@ function cancelarTarima() {
 }
 
 function actualizarBannerTarima() {
-    const banner = document.getElementById('tarimaBanner');
-    if (!banner) return;
-    if (!tarimaActiva) {
-        banner.style.display = 'none';
-        banner.innerHTML = '';
-        return;
-    }
-    const nSKUs = Object.keys(tarimaActiva.escaneos).length;
-    const nCajas = Object.values(tarimaActiva.escaneos).reduce((s, x) => s + x.cajas, 0);
-    banner.style.display = 'block';
-    banner.innerHTML = `
-        <div class="card card-padded" style="background:linear-gradient(135deg,rgba(10,132,255,0.12),rgba(191,90,242,0.08));border:0.5px solid rgba(10,132,255,0.3);">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-                <div style="min-width:0;">
-                    <div style="font-size:0.72rem;color:var(--blue-bright);font-weight:700;letter-spacing:0.5px;">
-                        📦 TARIMA ACTIVA
+    const banners = [
+        document.getElementById('tarimaBanner'),
+        document.getElementById('tarimaBannerInv')
+    ];
+
+    for (const banner of banners) {
+        if (!banner) continue;
+        if (!tarimaActiva) {
+            banner.style.display = 'none';
+            banner.innerHTML = '';
+            continue;
+        }
+        const nSKUs = Object.keys(tarimaActiva.escaneos).length;
+        const nCajas = Object.values(tarimaActiva.escaneos).reduce((s, x) => s + x.cajas, 0);
+        banner.style.display = 'block';
+        banner.innerHTML = `
+            <div class="card card-padded" style="background:linear-gradient(135deg,rgba(10,132,255,0.12),rgba(191,90,242,0.08));border:0.5px solid rgba(10,132,255,0.3);">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                    <div style="min-width:0;">
+                        <div style="font-size:0.72rem;color:var(--blue-bright);font-weight:700;letter-spacing:0.5px;">
+                            📦 TARIMA ACTIVA
+                        </div>
+                        <div style="font-weight:800;font-size:1.1rem;letter-spacing:-0.3px;">
+                            ${escapeHtml(tarimaActiva.id)}
+                        </div>
+                        <div style="font-size:0.72rem;color:var(--label);margin-top:2px;">
+                            ${nSKUs} SKU · ${nCajas} cajas escaneadas
+                        </div>
                     </div>
-                    <div style="font-weight:800;font-size:1.1rem;letter-spacing:-0.3px;">
-                        ${escapeHtml(tarimaActiva.id)}
+                    <div style="display:flex;gap:6px;flex-shrink:0;">
+                        <button class="btn btn-primary btn-verificar-tarima" style="padding:10px 14px;font-size:0.8rem;width:auto;">
+                            <i class="fas fa-clipboard-check"></i> Verificar
+                        </button>
+                        <button class="btn btn-secondary btn-cancelar-tarima" style="padding:10px 12px;font-size:0.8rem;color:var(--red);width:auto;">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
-                    <div style="font-size:0.72rem;color:var(--label);margin-top:2px;">
-                        ${nSKUs} SKU · ${nCajas} cajas escaneadas
-                    </div>
-                </div>
-                <div style="display:flex;gap:6px;flex-shrink:0;">
-                    <button class="btn btn-primary" id="validarTarimaBtn" style="padding:10px 14px;font-size:0.8rem;width:auto;">
-                        <i class="fas fa-check"></i> Validar
-                    </button>
-                    <button class="btn btn-secondary" id="cancelarTarimaBtn" style="padding:10px 12px;font-size:0.8rem;color:var(--red);width:auto;">
-                        <i class="fas fa-times"></i>
-                    </button>
                 </div>
             </div>
-        </div>
-    `;
-    const vBtn = document.getElementById('validarTarimaBtn');
-    const cBtn = document.getElementById('cancelarTarimaBtn');
-    if (vBtn) vBtn.addEventListener('click', validarTarima);
-    if (cBtn) cBtn.addEventListener('click', cancelarTarima);
+        `;
+    }
+
+    document.querySelectorAll('.btn-verificar-tarima').forEach(b => {
+        b.addEventListener('click', validarTarima);
+    });
+    document.querySelectorAll('.btn-cancelar-tarima').forEach(b => {
+        b.addEventListener('click', cancelarTarima);
+    });
 }
 
-// ===== VALIDACIÓN CONTRA REFERENCIA (respeta formato del archivo subido) =====
+// ===== VALIDACIÓN CONTRA REFERENCIA =====
 function validarTarima() {
     if (!tarimaActiva) {
         showToast('No hay tarima activa', 'warning');
@@ -871,7 +887,7 @@ function validarTarima() {
 
     const escaneado = tarimaActiva.escaneos;
 
-    // 1) Agrupar lo escaneado por materialKey (usando el catálogo de códigos)
+    // 1) Agrupar lo escaneado por materialKey
     const escaneadoPorMaterial = {};
     for (const [cod, item] of Object.entries(escaneado)) {
         const codInfo = window.catalogs.buscar(cod);
@@ -900,12 +916,11 @@ function validarTarima() {
         escaneadoPorMaterial[materialKey].cajas += item.cajas;
     }
 
-    // 2) Construir el reporte respetando el ORDEN del archivo original
+    // 2) Construir reporte respetando el ORDEN del archivo original
     const ordenOriginal = window.catalogs.obtenerOrdenTarima(tarimaActiva.id);
     const filasReporte = [];
     const yaIncluidos = new Set();
 
-    // 2a) Primero, todas las filas tal como venían en el archivo
     for (const materialKey of ordenOriginal) {
         const ref = refObj[materialKey];
         if (!ref) continue;
@@ -928,7 +943,6 @@ function validarTarima() {
         yaIncluidos.add(materialKey);
     }
 
-    // 2b) Después, SKUs escaneados que NO estaban en la referencia (extras)
     for (const [key, esc] of Object.entries(escaneadoPorMaterial)) {
         if (yaIncluidos.has(key)) continue;
         filasReporte.push({
@@ -981,52 +995,72 @@ function mostrarReporteTarima(rep) {
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
 
-    const perfecto = rep.filas.every(f => f.estado === 'OK');
+    // ===== FILTRAR SOLO DIFERENCIAS =====
+    const diferencias = rep.filas.filter(f => f.estado !== 'OK');
+    const perfecto = diferencias.length === 0;
     const diffTotal = rep.totalEscaneadoCajas - rep.totalEsperadoCajas;
 
     const iconColor = perfecto ? 'var(--green)' : 'var(--red)';
     const iconName  = perfecto ? 'check-circle' : 'exclamation-triangle';
 
     let filasHtml = '';
-    rep.filas.forEach(f => {
-        let color = 'var(--label)';
-        let estadoColor = 'var(--label)';
-        if (f.estado === 'OK')     { color = 'var(--green)';  estadoColor = 'var(--green)'; }
-        if (f.estado === 'FALTA')  { color = 'var(--red)';    estadoColor = 'var(--red)'; }
-        if (f.estado === 'SOBRA')  { color = 'var(--orange)'; estadoColor = 'var(--orange)'; }
-        if (f.estado === 'EXTRA')  { color = 'var(--purple)'; estadoColor = 'var(--purple)'; }
 
-        const signo = f.diferencia > 0 ? '+' : '';
-        const difTxt = f.diferencia === 0 ? '0' : `${signo}${f.diferencia}`;
-
-        filasHtml += `
-            <div style="padding:9px 0;border-bottom:0.5px solid var(--separator);">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:3px;">
-                    <div style="min-width:0;flex:1;">
-                        <div style="font-family:'SF Mono',monospace;font-size:0.72rem;color:var(--purple);font-weight:700;">
-                            ${escapeHtml(f.material || '—')}
-                        </div>
-                        <div style="font-size:0.78rem;color:var(--text);margin-top:2px;word-break:break-word;">
-                            ${escapeHtml(f.descripcion)}
-                        </div>
-                    </div>
-                    <div style="text-align:right;flex-shrink:0;">
-                        <div style="font-weight:800;font-size:0.95rem;color:${color};">
-                            ${difTxt}
-                        </div>
-                        <div style="font-size:0.6rem;font-weight:700;color:${estadoColor};letter-spacing:0.5px;">
-                            ${f.estado}
-                        </div>
-                    </div>
+    if (perfecto) {
+        filasHtml = `
+            <div style="text-align:center;padding:32px 20px;">
+                <div style="font-size:2.5rem;color:var(--green);margin-bottom:12px;">✓</div>
+                <div style="font-weight:700;font-size:1rem;color:var(--green);margin-bottom:6px;">
+                    Todo coincide
                 </div>
-                <div style="font-size:0.68rem;color:var(--label);">
-                    Esperado: <b style="color:var(--text);">${f.cajas_esperadas}</b>
-                    · Escaneado: <b style="color:var(--text);">${f.cajas_escaneadas}</b>
-                    ${!f.match && f.estado !== 'OK' ? '<span style="color:var(--orange);margin-left:6px;">⚠️ sin cruce</span>' : ''}
+                <div style="font-size:0.8rem;color:var(--label);">
+                    No hay diferencias con la referencia
                 </div>
             </div>
         `;
-    });
+    } else {
+        const orden = { FALTA: 0, SOBRA: 1, EXTRA: 2 };
+        diferencias.sort((a, b) => orden[a.estado] - orden[b.estado]);
+
+        diferencias.forEach(f => {
+            let color = 'var(--label)';
+            let icono = '';
+            if (f.estado === 'FALTA')  { color = 'var(--red)';    icono = '▼'; }
+            if (f.estado === 'SOBRA')  { color = 'var(--orange)'; icono = '▲'; }
+            if (f.estado === 'EXTRA')  { color = 'var(--purple)'; icono = '★'; }
+
+            const signo = f.diferencia > 0 ? '+' : '';
+            const difTxt = `${signo}${f.diferencia}`;
+
+            filasHtml += `
+                <div style="padding:11px 0;border-bottom:0.5px solid var(--separator);">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                        <div style="min-width:0;flex:1;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                                <span style="font-weight:800;color:${color};font-size:0.8rem;">${icono}</span>
+                                <span style="font-size:0.6rem;font-weight:800;color:${color};letter-spacing:0.6px;">${f.estado}</span>
+                                ${f.material ? `<span style="font-family:'SF Mono',monospace;font-size:0.65rem;color:var(--purple);font-weight:700;">${escapeHtml(f.material)}</span>` : ''}
+                            </div>
+                            <div style="font-size:0.82rem;color:var(--text);line-height:1.3;word-break:break-word;">
+                                ${escapeHtml(f.descripcion)}
+                            </div>
+                            <div style="font-size:0.68rem;color:var(--label);margin-top:4px;">
+                                Esperado: <b style="color:var(--text);">${f.cajas_esperadas}</b>
+                                · Escaneado: <b style="color:var(--text);">${f.cajas_escaneadas}</b>
+                            </div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-weight:800;font-size:1.3rem;color:${color};letter-spacing:-0.5px;line-height:1;">
+                                ${difTxt}
+                            </div>
+                            <div style="font-size:0.58rem;color:var(--label);font-weight:700;letter-spacing:0.4px;margin-top:2px;">
+                                CAJAS
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -1036,7 +1070,9 @@ function mostrarReporteTarima(rep) {
             <div class="scan-success-icon" style="background:rgba(255,255,255,0.05);color:${iconColor};border-color:${iconColor};">
                 <i class="fas fa-${iconName}"></i>
             </div>
-            <div class="modal-title">Validación tarima ${escapeHtml(rep.tarima)}</div>
+            <div class="modal-title">
+                ${perfecto ? 'Sin diferencias' : `Diferencias · ${escapeHtml(rep.tarima)}`}
+            </div>
             <div class="modal-message">
                 ${perfecto
                     ? 'La mercancía física coincide con la referencia.'
@@ -1068,21 +1104,20 @@ function mostrarReporteTarima(rep) {
                 </div>
             </div>
 
-            <div style="max-height:38vh;overflow-y:auto;padding:0 16px;margin-bottom:12px;">
-                ${filasHtml || '<div style="text-align:center;padding:20px;color:var(--label);">Sin diferencias</div>'}
+            <div style="max-height:42vh;overflow-y:auto;padding:0 16px;margin-bottom:12px;">
+                ${filasHtml}
             </div>
 
             <div class="modal-actions">
                 <button class="modal-btn modal-btn-primary" id="repConfirmar">
-                    <i class="fas fa-check"></i> Confirmar y sumar al inventario
+                    <i class="fas fa-check"></i> Finalizar tarima
                 </button>
                 <button class="modal-btn modal-btn-secondary" id="repExportar">
-                    <i class="fas fa-file-export"></i> Exportar reporte (CSV)
+                    <i class="fas fa-file-export"></i> Exportar diferencias (CSV)
                 </button>
                 <button class="modal-btn modal-btn-secondary" id="repSeguir">
                     Seguir escaneando
                 </button>
-                <button class="modal-btn modal-btn-cancel" id="repCancelar">Cancelar tarima</button>
             </div>
         </div>
     `;
@@ -1098,55 +1133,27 @@ function mostrarReporteTarima(rep) {
     };
 
     document.getElementById('repConfirmar').addEventListener('click', () => {
-        for (const [cod, item] of Object.entries(tarimaActiva.escaneos)) {
-            if (!productos[cod]) {
-                productos[cod] = {
-                    codigo: cod,
-                    cantidadCajas: 0,
-                    nombre: item.nombre || null,
-                    marca: null,
-                    material: item.material || null,
-                    materialNombre: item.materialNombre || null,
-                    matchPuntaje: null,
-                    timestamp: new Date().toISOString(),
-                    tarima: tarimaActiva.id
-                };
-            }
-            productos[cod].cantidadCajas += item.cajas;
-            productos[cod].timestamp = new Date().toISOString();
-            productos[cod].tarima = tarimaActiva.id;
-        }
-        guardarDatos();
-        renderizarProductos();
-        actualizarEstadisticas();
-        showToast(`✅ Tarima ${tarimaActiva.id} confirmada`, 'success');
+        showToast(`✅ Tarima ${tarimaActiva.id} finalizada`, 'success');
         tarimaActiva = null;
         actualizarBannerTarima();
         cerrar();
     });
 
     document.getElementById('repExportar').addEventListener('click', () => {
-        exportarReporteTarimaCSV(rep);
+        exportarReporteTarimaCSV(rep, diferencias);
     });
 
     document.getElementById('repSeguir').addEventListener('click', cerrar);
-
-    document.getElementById('repCancelar').addEventListener('click', () => {
-        tarimaActiva = null;
-        actualizarBannerTarima();
-        cerrar();
-        showToast('Sesión cancelada', 'warning');
-    });
 
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) cerrar();
     });
 }
 
-// ===== EXPORTAR REPORTE DE TARIMA (mismo formato del archivo subido) =====
-function exportarReporteTarimaCSV(rep) {
-    if (!rep || !rep.filas || rep.filas.length === 0) {
-        showToast('No hay datos para exportar', 'warning');
+// ===== EXPORTAR REPORTE DE TARIMA (solo diferencias) =====
+function exportarReporteTarimaCSV(rep, diferencias) {
+    if (!rep || !diferencias || diferencias.length === 0) {
+        showToast('No hay diferencias para exportar', 'warning');
         return;
     }
 
@@ -1162,7 +1169,7 @@ function exportarReporteTarimaCSV(rep) {
 
     const rows = [headers];
 
-    for (const f of rep.filas) {
+    for (const f of diferencias) {
         rows.push([
             f.material || '',
             f.descripcion || '',
@@ -1176,15 +1183,13 @@ function exportarReporteTarimaCSV(rep) {
 
     rows.push([]);
     rows.push(['# RESUMEN', '', '', '', '', '', '']);
-    rows.push(['# SKUs referencia', rep.totalSKUsRef, '', '', '', '', '']);
-    rows.push(['# SKUs escaneados', rep.totalSKUsEsc, '', '', '', '', '']);
+    rows.push(['# Tarima', rep.tarima, '', '', '', '', '']);
     rows.push(['# Cajas esperadas', rep.totalEsperadoCajas, '', '', '', '', '']);
     rows.push(['# Cajas escaneadas', rep.totalEscaneadoCajas, '', '', '', '', '']);
     rows.push(['# Diferencia total', rep.totalEscaneadoCajas - rep.totalEsperadoCajas, '', '', '', '', '']);
     rows.push(['# Faltantes', rep.resumen.faltantes, '', '', '', '', '']);
     rows.push(['# Sobrantes', rep.resumen.sobrantes, '', '', '', '', '']);
     rows.push(['# Extras', rep.resumen.extras, '', '', '', '', '']);
-    rows.push(['# OK', rep.resumen.ok, '', '', '', '', '']);
 
     const csvContent = rows.map(row =>
         row.map(cell => {
@@ -1198,13 +1203,13 @@ function exportarReporteTarimaCSV(rep) {
     const url = URL.createObjectURL(blob);
     const fecha = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
     link.href = url;
-    link.setAttribute('download', `reporte_${rep.tarima}_${fecha}.csv`);
+    link.setAttribute('download', `diferencias_${rep.tarima}_${fecha}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    showToast(`📥 Reporte ${rep.tarima} exportado`, 'success');
+    showToast(`📥 Diferencias exportadas`, 'success');
 }
 
 // ===== MODAL PARA ELEGIR TARIMA =====
@@ -1628,7 +1633,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     cargarDatos();
     initLaserScanner();
 
-    // ===== BOTÓN INICIAR TARIMA =====
+    // ===== BOTÓN INICIAR TARIMA (en tab Inventario) =====
     const iniciarTarimaBtn = document.getElementById("iniciarTarimaBtn");
     if (iniciarTarimaBtn) {
         iniciarTarimaBtn.addEventListener("click", abrirSelectorTarima);
@@ -1682,46 +1687,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             await agregarProductoConBusqueda(code, parseInt(cant));
             manualCode.value = "";
             cajasQuantity.value = "1";
-            // Mantener el foco en el input para seguir capturando
-            manualCode.focus();
+            reiniciarFocoScanner();
         });
     }
 
     if (manualCode) {
         manualCode.addEventListener("keypress", (e) => {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                addManualBtn.click();
-            }
-        });
-
-        // Detener el foco automático mientras el usuario escribe
-        manualCode.addEventListener("focus", () => {
-            detenerFocoScanner();
-        });
-        manualCode.addEventListener("blur", () => {
-            const otros = ['cajasQuantity', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
-            const activeEl = document.activeElement;
-            if (!activeEl || !otros.includes(activeEl.id)) {
-                setTimeout(() => {
-                    if (!modalAbierto && !settingsAbierto) reiniciarFocoScanner();
-                }, 150);
-            }
-        });
-    }
-
-    if (cajasQuantity) {
-        cajasQuantity.addEventListener("focus", () => {
-            detenerFocoScanner();
-        });
-        cajasQuantity.addEventListener("blur", () => {
-            const otros = ['manualCode', 'dbCodeInput', 'dbDescInput', 'dbBulkInput'];
-            const activeEl = document.activeElement;
-            if (!activeEl || !otros.includes(activeEl.id)) {
-                setTimeout(() => {
-                    if (!modalAbierto && !settingsAbierto) reiniciarFocoScanner();
-                }, 150);
-            }
+            if (e.key === "Enter") addManualBtn.click();
         });
     }
 
