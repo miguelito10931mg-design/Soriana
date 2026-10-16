@@ -64,7 +64,7 @@ class Catalogs {
     _separarCodigoDescripcion(texto) {
         if (!texto) return { codigo: '', descripcion: '' };
 
-        const match = texto.match(/^([A-Za-z0-9\-_.\/]{3,20})[\s\-,\t]+(.+)$/);
+      const match = texto.match(/^([A-Za-z0-9\-_.\/]{3,20})[\s\-,\t]+(.+)$/);
 
         if (match) {
             const posibleCodigo = match[1].trim();
@@ -82,9 +82,8 @@ class Catalogs {
         if (!texto) return false;
         const limpio = texto.replace(/[\s\-_]/g, '');
 
-        if (/^\d{3,20}$/.test(limpio)) return true;
-
-        if (/^[A-Z0-9]{3,20}$/i.test(limpio)) {
+        if (/^\d{3,30}$/.test(limpio)) return true;
+        if (/^[A-Z0-9]{3,30}$/i.test(limpio)) {
             const palabrasComunes = ['SOPA', 'REFRESCO', 'AGUA', 'PAN', 'LECHE', 'JAMON', 'SALCHICHA',
                                      'YOGHURT', 'QUESO', 'ACEITE', 'GALLETA', 'CHICLE', 'CERVEZA',
                                      'SALSA', 'ATUN', 'ARROZ', 'FRIJOL', 'CAFE', 'TE', 'JUGO'];
