@@ -203,7 +203,8 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
     }
 
     if (productos[codigo]) {
-        mostrarModalCantidad(
+        // ✅ await para esperar confirmación del usuario
+        return await mostrarModalCantidad(
             codigo,
             nombreProducto || productos[codigo].nombre || codigo,
             productos[codigo].cantidadCajas,
@@ -213,9 +214,9 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
             materialNombreProducto || productos[codigo].materialNombre || null,
             matchPuntajeProducto || productos[codigo].matchPuntaje || null
         );
-        return true;
     } else {
-        mostrarModalCantidad(
+        // ✅ await para esperar confirmación del usuario
+        return await mostrarModalCantidad(
             codigo,
             nombreProducto || codigo,
             0,
@@ -226,205 +227,213 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
             materialNombreProducto,
             matchPuntajeProducto
         );
-        return true;
     }
 }
 
 // ===== MODAL DE CANTIDAD =====
+// ✅ Devuelve una Promise que resuelve al confirmar (true) o cancelar (false)
 function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombreNuevo, marcaNueva, materialNuevo, materialNombreNuevo, matchPuntaje) {
-    modalAbierto = true;
-    detenerFocoScanner();
+    return new Promise((resolve) => {
+        modalAbierto = true;
+        detenerFocoScanner();
 
-    const existing = document.querySelector('.modal-overlay');
-    if (existing) existing.remove();
+        const existing = document.querySelector('.modal-overlay');
+        if (existing) existing.remove();
 
-    let cantidad = 1;
+        let cantidad = 1;
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
 
-    const titulo = esExistente ? 'Agregar cajas' : 'Producto encontrado';
-    const mensaje = esExistente
-        ? `Actual: ${cantidadActual} cajas. ¿Cuántas agregar?`
-        : `¿Cuántas cajas de este producto?`;
+        const titulo = esExistente ? 'Agregar cajas' : 'Producto encontrado';
+        const mensaje = esExistente
+            ? `Actual: ${cantidadActual} cajas. ¿Cuántas agregar?`
+            : `¿Cuántas cajas de este producto?`;
 
-    const materialMostrar = materialNuevo || (productos[codigo] && productos[codigo].material) || null;
-    const materialNombreMostrar = materialNombreNuevo || (productos[codigo] && productos[codigo].materialNombre) || null;
-    const puntajeMostrar = matchPuntaje || (productos[codigo] && productos[codigo].matchPuntaje) || null;
+        const materialMostrar = materialNuevo || (productos[codigo] && productos[codigo].material) || null;
+        const materialNombreMostrar = materialNombreNuevo || (productos[codigo] && productos[codigo].materialNombre) || null;
+        const puntajeMostrar = matchPuntaje || (productos[codigo] && productos[codigo].matchPuntaje) || null;
 
-    let calidadBadge = '';
-    if (puntajeMostrar) {
-        let color = 'var(--green)';
-        let icono = 'fa-check-circle';
-        if (puntajeMostrar < 70) { color = 'var(--red)'; icono = 'fa-exclamation-circle'; }
-        else if (puntajeMostrar < 85) { color = 'var(--yellow)'; icono = 'fa-info-circle'; }
+        let calidadBadge = '';
+        if (puntajeMostrar) {
+            let color = 'var(--green)';
+            let icono = 'fa-check-circle';
+            if (puntajeMostrar < 70) { color = 'var(--red)'; icono = 'fa-exclamation-circle'; }
+            else if (puntajeMostrar < 85) { color = 'var(--yellow)'; icono = 'fa-info-circle'; }
 
-        calidadBadge = `<span style="font-size:0.68rem;color:${color};margin-left:6px;font-weight:700;">
-            <i class="fas ${icono}"></i> ${puntajeMostrar}%
-        </span>`;
-    }
+            calidadBadge = `<span style="font-size:0.68rem;color:${color};margin-left:6px;font-weight:700;">
+                <i class="fas ${icono}"></i> ${puntajeMostrar}%
+            </span>`;
+        }
 
-    const materialHtml = materialMostrar
-        ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
-               <span style="color:var(--label);font-size:0.8rem;">🔢 Material ${calidadBadge}</span>
-               <span style="font-weight:800;color:var(--purple);font-size:1.05rem;font-family:'SF Mono',monospace;letter-spacing:0.5px;">${escapeHtml(materialMostrar)}</span>
-           </div>
-           ${materialNombreMostrar ? `<div style="font-size:0.72rem;color:var(--label);text-align:right;margin-bottom:6px;font-style:italic;">${escapeHtml(materialNombreMostrar)}</div>` : ''}`
-        : `<div style="padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
-               <span style="color:var(--orange);font-size:0.8rem;">⚠️ Sin material asignado</span>
-           </div>`;
+        const materialHtml = materialMostrar
+            ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
+                   <span style="color:var(--label);font-size:0.8rem;">🔢 Material ${calidadBadge}</span>
+                   <span style="font-weight:800;color:var(--purple);font-size:1.05rem;font-family:'SF Mono',monospace;letter-spacing:0.5px;">${escapeHtml(materialMostrar)}</span>
+               </div>
+               ${materialNombreMostrar ? `<div style="font-size:0.72rem;color:var(--label);text-align:right;margin-bottom:6px;font-style:italic;">${escapeHtml(materialNombreMostrar)}</div>` : ''}`
+            : `<div style="padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
+                   <span style="color:var(--orange);font-size:0.8rem;">⚠️ Sin material asignado</span>
+               </div>`;
 
-    const tarimaBadge = tarimaActiva
-        ? `<div style="display:flex;justify-content:center;margin-bottom:10px;">
-               <span style="background:rgba(10,132,255,0.15);color:var(--blue-bright);padding:4px 12px;border-radius:100px;font-size:0.72rem;font-weight:700;letter-spacing:0.4px;">
-                   <i class="fas fa-pallet"></i> ${escapeHtml(tarimaActiva.id)}
-               </span>
-           </div>`
-        : '';
+        const tarimaBadge = tarimaActiva
+            ? `<div style="display:flex;justify-content:center;margin-bottom:10px;">
+                   <span style="background:rgba(10,132,255,0.15);color:var(--blue-bright);padding:4px 12px;border-radius:100px;font-size:0.72rem;font-weight:700;letter-spacing:0.4px;">
+                       <i class="fas fa-pallet"></i> ${escapeHtml(tarimaActiva.id)}
+                   </span>
+               </div>`
+            : '';
 
-    overlay.innerHTML = `
-        <div class="modal-sheet">
-            <div class="modal-handle"></div>
-            <div class="scan-success-icon"><i class="fas fa-cubes"></i></div>
-            <div class="modal-title">${escapeHtml(titulo)}</div>
-            <div class="modal-message">${escapeHtml(mensaje)}</div>
+        overlay.innerHTML = `
+            <div class="modal-sheet">
+                <div class="modal-handle"></div>
+                <div class="scan-success-icon"><i class="fas fa-cubes"></i></div>
+                <div class="modal-title">${escapeHtml(titulo)}</div>
+                <div class="modal-message">${escapeHtml(mensaje)}</div>
 
-            ${tarimaBadge}
+                ${tarimaBadge}
 
-            <div class="modal-product-info">
-                ${materialHtml}
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;gap:10px;">
-                    <span style="color:var(--label);font-size:0.8rem;flex-shrink:0;">📝 Descripción</span>
-                    <span style="font-weight:600;color:var(--text);font-size:0.85rem;text-align:right;word-break:break-word;">${escapeHtml(nombre)}</span>
+                <div class="modal-product-info">
+                    ${materialHtml}
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;gap:10px;">
+                        <span style="color:var(--label);font-size:0.8rem;flex-shrink:0;">📝 Descripción</span>
+                        <span style="font-weight:600;color:var(--text);font-size:0.85rem;text-align:right;word-break:break-word;">${escapeHtml(nombre)}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
+                        <span style="color:var(--label);font-size:0.8rem;">📦 Código</span>
+                        <span style="font-family:'SF Mono',monospace;color:var(--teal);font-weight:600;font-size:0.85rem;">${escapeHtml(codigo)}</span>
+                    </div>
+                    ${marcaNueva && marcaNueva !== 'Sin material' && marcaNueva !== 'Base de datos local' ? `<div style="color:var(--label);font-size:0.75rem;margin-top:8px;text-align:center;">${escapeHtml(marcaNueva)}</div>` : ''}
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
-                    <span style="color:var(--label);font-size:0.8rem;">📦 Código</span>
-                    <span style="font-family:'SF Mono',monospace;color:var(--teal);font-weight:600;font-size:0.85rem;">${escapeHtml(codigo)}</span>
+
+                <div class="modal-input-label">Cajas a ${esExistente ? 'agregar' : 'registrar'}</div>
+                <div class="stepper">
+                    <button class="stepper-btn" id="modalStepDown">−</button>
+                    <div class="stepper-value" id="modalStepValue">${cantidad}</div>
+                    <button class="stepper-btn" id="modalStepUp">+</button>
                 </div>
-                ${marcaNueva && marcaNueva !== 'Sin material' && marcaNueva !== 'Base de datos local' ? `<div style="color:var(--label);font-size:0.75rem;margin-top:8px;text-align:center;">${escapeHtml(marcaNueva)}</div>` : ''}
+                ${esExistente ? `<div style="text-align:center;color:var(--label);font-size:0.8rem;margin-bottom:12px;">Total será: <span style="color:var(--green);font-weight:700;" id="totalCajasDisplay">${cantidadActual + cantidad}</span> cajas</div>` : ''}
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-primary" id="modalConfirm">Confirmar</button>
+                    <button class="modal-btn modal-btn-cancel" id="modalCancel">Cancelar</button>
+                </div>
             </div>
+        `;
 
-            <div class="modal-input-label">Cajas a ${esExistente ? 'agregar' : 'registrar'}</div>
-            <div class="stepper">
-                <button class="stepper-btn" id="modalStepDown">−</button>
-                <div class="stepper-value" id="modalStepValue">${cantidad}</div>
-                <button class="stepper-btn" id="modalStepUp">+</button>
-            </div>
-            ${esExistente ? `<div style="text-align:center;color:var(--label);font-size:0.8rem;margin-bottom:12px;">Total será: <span style="color:var(--green);font-weight:700;" id="totalCajasDisplay">${cantidadActual + cantidad}</span> cajas</div>` : ''}
-            <div class="modal-actions">
-                <button class="modal-btn modal-btn-primary" id="modalConfirm">Confirmar</button>
-                <button class="modal-btn modal-btn-cancel" id="modalCancel">Cancelar</button>
-            </div>
-        </div>
-    `;
+        document.body.appendChild(overlay);
+        void overlay.offsetWidth;
+        overlay.classList.add('active');
 
-    document.body.appendChild(overlay);
-    void overlay.offsetWidth;
-    overlay.classList.add('active');
+        const valEl = document.getElementById('modalStepValue');
 
-    const valEl = document.getElementById('modalStepValue');
+        document.getElementById('modalStepDown').addEventListener('click', () => {
+            if (cantidad > 1) {
+                cantidad--;
+                valEl.textContent = cantidad;
+                if (esExistente) {
+                    const totalDisplay = document.getElementById('totalCajasDisplay');
+                    if (totalDisplay) totalDisplay.textContent = cantidadActual + cantidad;
+                }
+            }
+        });
 
-    document.getElementById('modalStepDown').addEventListener('click', () => {
-        if (cantidad > 1) {
-            cantidad--;
-            valEl.textContent = cantidad;
+        document.getElementById('modalStepUp').addEventListener('click', () => {
+            if (cantidad < MAX_CAJAS_POR_ESCANEO) {
+                cantidad++;
+                valEl.textContent = cantidad;
+                if (esExistente) {
+                    const totalDisplay = document.getElementById('totalCajasDisplay');
+                    if (totalDisplay) totalDisplay.textContent = cantidadActual + cantidad;
+                }
+            }
+        });
+
+        let resolvio = false;
+        function cerrarModal(resuelto = false) {
+            if (resolvio) return;
+            resolvio = true;
+            modalAbierto = false;
+            overlay.classList.remove('active');
+            setTimeout(() => {
+                overlay.remove();
+                reiniciarFocoScanner();
+            }, 300);
+            resolve(resuelto);
+        }
+
+        document.getElementById('modalConfirm').addEventListener('click', () => {
+            // ===== 1) Sumar al inventario global =====
             if (esExistente) {
-                const totalDisplay = document.getElementById('totalCajasDisplay');
-                if (totalDisplay) totalDisplay.textContent = cantidadActual + cantidad;
-            }
-        }
-    });
-
-    document.getElementById('modalStepUp').addEventListener('click', () => {
-        if (cantidad < MAX_CAJAS_POR_ESCANEO) {
-            cantidad++;
-            valEl.textContent = cantidad;
-            if (esExistente) {
-                const totalDisplay = document.getElementById('totalCajasDisplay');
-                if (totalDisplay) totalDisplay.textContent = cantidadActual + cantidad;
-            }
-        }
-    });
-
-    function cerrarModal() {
-        modalAbierto = false;
-        overlay.classList.remove('active');
-        setTimeout(() => {
-            overlay.remove();
-            reiniciarFocoScanner();
-        }, 300);
-    }
-
-    document.getElementById('modalConfirm').addEventListener('click', () => {
-        // ===== 1) Sumar al inventario global =====
-        if (esExistente) {
-            productos[codigo].cantidadCajas += cantidad;
-            productos[codigo].timestamp = new Date().toISOString();
-            // Actualizar material si el nuevo tiene mejor puntaje
-            const puntajeActual = productos[codigo].matchPuntaje || 0;
-            const puntajeNuevo = puntajeMostrar || 0;
-            if (materialMostrar && (!productos[codigo].material || puntajeNuevo > puntajeActual)) {
-                productos[codigo].material = materialMostrar;
-                productos[codigo].materialNombre = materialNombreMostrar;
-                productos[codigo].matchPuntaje = puntajeMostrar;
-            }
-        } else {
-            productos[codigo] = {
-                codigo: codigo,
-                cantidadCajas: cantidad,
-                nombre: nombreNuevo || null,
-                marca: marcaNueva || null,
-                material: materialMostrar || null,
-                materialNombre: materialNombreMostrar || null,
-                matchPuntaje: puntajeMostrar || null,
-                timestamp: new Date().toISOString()
-            };
-        }
-
-        // ===== 2) Si hay tarima activa, sumar también al buffer =====
-        if (tarimaActiva) {
-            if (!tarimaActiva.escaneos[codigo]) {
-                tarimaActiva.escaneos[codigo] = {
-                    cajas: 0,
-                    piezas: 0,
-                    nombre: nombre,
-                    material: materialMostrar,
-                    materialNombre: materialNombreMostrar
+                productos[codigo].cantidadCajas += cantidad;
+                productos[codigo].timestamp = new Date().toISOString();
+                // Actualizar material si el nuevo tiene mejor puntaje
+                const puntajeActual = productos[codigo].matchPuntaje || 0;
+                const puntajeNuevo = puntajeMostrar || 0;
+                if (materialMostrar && (!productos[codigo].material || puntajeNuevo > puntajeActual)) {
+                    productos[codigo].material = materialMostrar;
+                    productos[codigo].materialNombre = materialNombreMostrar;
+                    productos[codigo].matchPuntaje = puntajeMostrar;
+                }
+            } else {
+                productos[codigo] = {
+                    codigo: codigo,
+                    cantidadCajas: cantidad,
+                    nombre: nombreNuevo || null,
+                    marca: marcaNueva || null,
+                    material: materialMostrar || null,
+                    materialNombre: materialNombreMostrar || null,
+                    matchPuntaje: puntajeMostrar || null,
+                    timestamp: new Date().toISOString()
                 };
             }
-            tarimaActiva.escaneos[codigo].cajas += cantidad;
-            productos[codigo].tarima = tarimaActiva.id;
-            guardarTarimaActiva();
-            actualizarBannerTarima();
-            showToast(`📦 +${cantidad} → ${tarimaActiva.id} (${productos[codigo].cantidadCajas} total)`);
-        } else {
-            if (esExistente) {
-                showToast(`📦 +${cantidad} cajas (total ${productos[codigo].cantidadCajas})`);
+
+            // ===== 2) Si hay tarima activa, sumar también al buffer =====
+            if (tarimaActiva) {
+                if (!tarimaActiva.escaneos[codigo]) {
+                    tarimaActiva.escaneos[codigo] = {
+                        cajas: 0,
+                        piezas: 0,
+                        nombre: nombre,
+                        material: materialMostrar,
+                        materialNombre: materialNombreMostrar
+                    };
+                }
+                tarimaActiva.escaneos[codigo].cajas += cantidad;
+                productos[codigo].tarima = tarimaActiva.id;
+                guardarTarimaActiva();
+                actualizarBannerTarima();
+                showToast(`📦 +${cantidad} → ${tarimaActiva.id} (${productos[codigo].cantidadCajas} total)`);
             } else {
-                const matMsg = materialMostrar ? ` · Mat ${materialMostrar}` : '';
-                showToast(`📦 ${nombre}${matMsg} | ${cantidad} caja(s)`);
+                if (esExistente) {
+                    showToast(`📦 +${cantidad} cajas (total ${productos[codigo].cantidadCajas})`);
+                } else {
+                    const matMsg = materialMostrar ? ` · Mat ${materialMostrar}` : '';
+                    showToast(`📦 ${nombre}${matMsg} | ${cantidad} caja(s)`);
+                }
             }
-        }
 
-        guardarDatos();
-        renderizarProductos();
-        actualizarEstadisticas();
-        cerrarModal();
+            guardarDatos();
+            renderizarProductos();
+            actualizarEstadisticas();
+            cerrarModal(true);   // ✅ resolve(true) = confirmado
+        });
+
+        document.getElementById('modalCancel').addEventListener('click', () => {
+            cerrarModal(false);  // ✅ resolve(false) = cancelado
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) cerrarModal(false);
+        });
+
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                cerrarModal(false);
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
     });
-
-    document.getElementById('modalCancel').addEventListener('click', cerrarModal);
-
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) cerrarModal();
-    });
-
-    const escHandler = (e) => {
-        if (e.key === 'Escape') {
-            cerrarModal();
-            document.removeEventListener('keydown', escHandler);
-        }
-    };
-    document.addEventListener('keydown', escHandler);
 }
 
 // ===== SISTEMA DE FOCO DEL SCANNER =====
@@ -439,6 +448,10 @@ function detenerFocoScanner() {
 }
 
 function reiniciarFocoScanner() {
+    // ✅ No reactivar foco si estamos en la pestaña Inventario
+    const tabInv = document.getElementById('tab-inventario');
+    if (tabInv && tabInv.classList.contains('active')) return;
+
     if (focoActivo) return;
     focoActivo = true;
     enfocarScannerInmediato();
@@ -901,6 +914,7 @@ function validarTarima() {
             escaneadoPorMaterial[key] = {
                 descripcion: descripcionEsc,
                 codigoOriginal: cod,
+                codigos: [cod],
                 cajas: item.cajas,
                 match: false
             };
@@ -911,9 +925,13 @@ function validarTarima() {
             escaneadoPorMaterial[materialKey] = {
                 descripcion: descripcionEsc,
                 codigoOriginal: cod,
+                codigos: [],
                 cajas: 0,
                 match: true
             };
+        }
+        if (!escaneadoPorMaterial[materialKey].codigos.includes(cod)) {
+            escaneadoPorMaterial[materialKey].codigos.push(cod);
         }
         escaneadoPorMaterial[materialKey].cajas += item.cajas;
     }
@@ -933,6 +951,8 @@ function validarTarima() {
         const estado = diff === 0 ? 'OK' : (diff < 0 ? 'FALTA' : 'SOBRA');
 
         filasReporte.push({
+            codigo: esc.codigoOriginal || '',
+            codigos: esc.codigos || (esc.codigoOriginal ? [esc.codigoOriginal] : []),
             material: ref.material,
             descripcion: ref.descripcion,
             referencia: tarimaActiva.id,
@@ -948,6 +968,8 @@ function validarTarima() {
     for (const [key, esc] of Object.entries(escaneadoPorMaterial)) {
         if (yaIncluidos.has(key)) continue;
         filasReporte.push({
+            codigo: esc.codigoOriginal || '',
+            codigos: esc.codigos || [],
             material: '',
             descripcion: esc.descripcion,
             referencia: tarimaActiva.id,
@@ -1226,15 +1248,21 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
         return;
     }
 
-    const headers = ['material', 'descripcion', 'referencia', 'cajas_esperadas', 'cajas_escaneadas', 'diferencia', 'estado'];
+    const codigosDeFila = (f) => {
+        if (Array.isArray(f.codigos) && f.codigos.length) return f.codigos.join(', ');
+        return f.codigo || '';
+    };
+
+    const headers = ['codigo', 'material', 'descripcion', 'referencia', 'cajas_esperadas', 'cajas_escaneadas', 'diferencia', 'estado'];
     const rows = [headers];
 
     // Bloque 1: en orden del archivo
-    rows.push(['# ESCANEADO EN ORDEN DEL ARCHIVO', '', '', '', '', '', '']);
+    rows.push(['# ESCANEADO EN ORDEN DEL ARCHIVO', '', '', '', '', '', '', '']);
     for (const materialKey of rep.orden) {
         const f = rep.filas.find(x => x.descripcion && window.catalogs.normalizar(x.descripcion) === materialKey);
         if (!f) continue;
         rows.push([
+            codigosDeFila(f),
             f.material || '',
             f.descripcion || '',
             f.referencia || '',
@@ -1248,9 +1276,10 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
     // Bloque 2: faltantes
     if (faltantes && faltantes.length > 0) {
         rows.push([]);
-        rows.push(['# FALTANTES', '', '', '', '', '', '']);
+        rows.push(['# FALTANTES', '', '', '', '', '', '', '']);
         for (const f of faltantes) {
             rows.push([
+                codigosDeFila(f),
                 f.material || '',
                 f.descripcion || '',
                 f.referencia || '',
@@ -1265,9 +1294,10 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
     // Bloque 3: extras
     if (extras && extras.length > 0) {
         rows.push([]);
-        rows.push(['# EXTRAS', '', '', '', '', '', '']);
+        rows.push(['# EXTRAS', '', '', '', '', '', '', '']);
         for (const f of extras) {
             rows.push([
+                codigosDeFila(f),
                 f.material || '',
                 f.descripcion || '',
                 f.referencia || '',
@@ -1281,13 +1311,13 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
 
     // Resumen
     rows.push([]);
-    rows.push(['# RESUMEN', '', '', '', '', '', '']);
-    rows.push(['# Tarima', rep.tarima, '', '', '', '', '']);
-    rows.push(['# Cajas esperadas', rep.totalEsperadoCajas, '', '', '', '', '']);
-    rows.push(['# Cajas escaneadas', rep.totalEscaneadoCajas, '', '', '', '', '']);
-    rows.push(['# Diferencia total', rep.totalEscaneadoCajas - rep.totalEsperadoCajas, '', '', '', '', '']);
-    rows.push(['# Faltantes', rep.resumen.faltantes, '', '', '', '', '']);
-    rows.push(['# Extras', rep.resumen.extras, '', '', '', '', '']);
+    rows.push(['# RESUMEN', '', '', '', '', '', '', '']);
+    rows.push(['# Tarima', rep.tarima, '', '', '', '', '', '']);
+    rows.push(['# Cajas esperadas', rep.totalEsperadoCajas, '', '', '', '', '', '']);
+    rows.push(['# Cajas escaneadas', rep.totalEscaneadoCajas, '', '', '', '', '', '']);
+    rows.push(['# Diferencia total', rep.totalEscaneadoCajas - rep.totalEsperadoCajas, '', '', '', '', '', '']);
+    rows.push(['# Faltantes', rep.resumen.faltantes, '', '', '', '', '', '']);
+    rows.push(['# Extras', rep.resumen.extras, '', '', '', '', '', '']);
 
     const csvContent = rows.map(row =>
         row.map(cell => {
@@ -1771,43 +1801,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    // Botón manual
+    // ===== BOTÓN MANUAL (ahora vive en la pestaña Inventario) =====
     const addManualBtn = document.getElementById("addManualBtn");
     const manualCode = document.getElementById("manualCode");
     const cajasQuantity = document.getElementById("cajasQuantity");
 
-    if (addManualBtn) {
+    if (addManualBtn && manualCode && cajasQuantity) {
         addManualBtn.addEventListener("click", async () => {
             const code = manualCode.value.trim();
             const cant = cajasQuantity.value;
             if (code === "") {
                 showToast("Ingresa un código", "error");
+                manualCode.focus();
                 return;
             }
-            await agregarProductoConBusqueda(code, parseInt(cant));
-            manualCode.value = "";
-            cajasQuantity.value = "1";
-            // Devolver foco al input manual para seguir escribiendo
+            addManualBtn.disabled = true;
+            try {
+                await agregarProductoConBusqueda(code, parseInt(cant));
+                manualCode.value = "";
+                cajasQuantity.value = "1";
+            } finally {
+                addManualBtn.disabled = false;
+            }
+            // El foco lo maneja reiniciarFocoScanner() al cerrar el modal.
+            // Mantener el foco en manualCode para seguir capturando:
             manualCode.focus();
         });
-    }
 
-    if (manualCode) {
         manualCode.addEventListener("keypress", (e) => {
             if (e.key === "Enter") addManualBtn.click();
-        });
-    }
-
-    // Botón de prueba
-    const quickTestBtn = document.getElementById("quickTestBtn");
-    if (quickTestBtn) {
-        quickTestBtn.addEventListener("click", () => {
-            const testCode = "7501234567890";
-            const existeEnDB = database.buscarProducto(testCode);
-            if (!existeEnDB) {
-                database.agregarProducto(testCode, "Producto de prueba");
-            }
-            agregarProductoConBusqueda(testCode, 1);
         });
     }
 
