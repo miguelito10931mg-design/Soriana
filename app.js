@@ -150,6 +150,20 @@ function generarVariantesCodigo(codigo) {
 
     return Array.from(set).filter(v => v.length >= 3);
 }
+window.generarVariantesCodigo = generarVariantesCodigo;
+
+// ===== ✅ NUEVO: ENCONTRAR CÓDIGO YA EXISTENTE EN EL INVENTARIO =====
+// Si el usuario escanea "07501234" pero ya guardó "7501234",
+// devuelve el código real guardado para no duplicar.
+function encontrarCodigoExistenteEnProductos(codigo) {
+    if (!codigo) return null;
+    const variantes = generarVariantesCodigo(codigo);
+    for (const v of variantes) {
+        if (productos[v]) return v;
+    }
+    return null;
+}
+window.encontrarCodigoExistenteEnProductos = encontrarCodigoExistenteEnProductos;
 
 // ===== CONSULTA A BASE DE DATOS LOCAL (SIN API EXTERNA) =====
 async function buscarProducto(codigo) {
@@ -254,23 +268,32 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
 
     // ✅ Fallback final: si no hay nombre, usar el que ya estaba guardado o el código
     if (!nombreProducto) {
-        nombreProducto = (productos[codigo] && productos[codigo].nombre)
-            ? productos[codigo].nombre
-            : `Producto ${codigo}`;
+        const codExistenteFallback = encontrarCodigoExistenteEnProductos(codigo);
+        if (codExistenteFallback && productos[codExistenteFallback].nombre) {
+            nombreProducto = productos[codExistenteFallback].nombre;
+        } else {
+            nombreProducto = `Producto ${codigo}`;
+        }
     }
 
-    if (productos[codigo]) {
+    // ✅ NUEVO: buscar si ya existe con alguna variante (con/sin cero, espacios, guiones)
+    const codigoExistente = encontrarCodigoExistenteEnProductos(codigo);
+
+    if (codigoExistente) {
+        // ⚠️ Importante: usar el código guardado real, no el escaneado,
+        // para que productos[codigoExistente].cantidadCajas se actualice correctamente.
         return await mostrarModalCantidad(
-            codigo,
-            nombreProducto || productos[codigo].nombre || codigo,
-            productos[codigo].cantidadCajas,
+            codigoExistente,                                     // ← código real en inventario
+            nombreProducto || productos[codigoExistente].nombre || codigoExistente,
+            productos[codigoExistente].cantidadCajas,
             true,
             null, null,
-            materialProducto || productos[codigo].material || null,
-            materialNombreProducto || productos[codigo].materialNombre || null,
-            matchPuntajeProducto || productos[codigo].matchPuntaje || null
+            materialProducto || productos[codigoExistente].material || null,
+            materialNombreProducto || productos[codigoExistente].materialNombre || null,
+            matchPuntajeProducto || productos[codigoExistente].matchPuntaje || null
         );
     } else {
+        // No existe: crear nuevo con el código tal como se escaneó
         return await mostrarModalCantidad(
             codigo,
             nombreProducto || codigo,
