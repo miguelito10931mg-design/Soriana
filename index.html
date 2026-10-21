@@ -1247,6 +1247,11 @@
                 </div>
             </div>
 
+        </section>
+
+        <section class="tab-panel" id="tab-inventario">
+
+            <!-- ✅ CAPTURA MANUAL MOVIDA A INVENTARIO -->
             <div class="section">
                 <div class="section-header">
                     <div class="section-title">Captura manual</div>
@@ -1266,15 +1271,9 @@
                     <button class="btn btn-primary" id="addManualBtn">
                         <i class="fas fa-search"></i> Buscar y agregar
                     </button>
-                    <button class="btn btn-secondary mt-8" id="quickTestBtn">
-                        <i class="fas fa-microchip"></i> Producto de prueba
-                    </button>
                 </div>
             </div>
 
-        </section>
-
-        <section class="tab-panel" id="tab-inventario">
             <div class="section">
                 <div class="section-header">
                     <div class="section-title">Productos registrados</div>
@@ -1375,6 +1374,13 @@
 
             if (name === 'inventario' && typeof renderizarProductos === 'function') {
                 renderizarProductos();
+                // En Inventario NO queremos que el scanner robe el foco
+                if (typeof detenerFocoScanner === 'function') detenerFocoScanner();
+            }
+
+            // Al volver a Escáner, reactivar el foco del láser
+            if (name === 'escaner' && typeof reiniciarFocoScanner === 'function') {
+                reiniciarFocoScanner();
             }
         }
 
