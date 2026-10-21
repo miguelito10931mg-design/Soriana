@@ -123,20 +123,57 @@ function actualizarEstadisticas() {
     if (tc) tc.innerText = totalCajas;
 }
 
+// ===== GENERADOR DE VARIANTES DE CÓDIGO =====
+// ✅ Tolera ceros iniciales, espacios y guiones que agregan/quitan los escáneres
+function generarVariantesCodigo(codigo) {
+    const base = String(codigo).trim();
+    const set = new Set();
+
+    set.add(base);
+
+    // Sin espacios ni guiones
+    const limpio = base.replace(/[\s\-]/g, '');
+    if (limpio) set.add(limpio);
+
+    // Sin cero inicial (si tiene)
+    if (base.startsWith('0') && base.length > 1) set.add(base.slice(1));
+    if (limpio.startsWith('0') && limpio.length > 1) set.add(limpio.slice(1));
+
+    // Con cero inicial (si no tiene)
+    if (!base.startsWith('0')) set.add('0' + base);
+    if (!limpio.startsWith('0')) set.add('0' + limpio);
+
+    // Variantes limpias de las dos anteriores
+    Array.from(set).forEach(v => {
+        set.add(v.replace(/[\s\-]/g, ''));
+    });
+
+    return Array.from(set).filter(v => v.length >= 3);
+}
+
 // ===== CONSULTA A BASE DE DATOS LOCAL (SIN API EXTERNA) =====
 async function buscarProducto(codigo) {
     await database.esperarInicializacion();
 
-    // 1) Catálogo de códigos
+    // ✅ Genera variantes del código para tolerar ceros/espacios/guiones
+    const variantes = generarVariantesCodigo(codigo);
+    console.log('🔍 Buscando variantes:', variantes);
+
+    // 1) Catálogo de códigos — probar cada variante
     if (window.catalogs) {
-        const enCatalogo = window.catalogs.buscar(codigo);
+        let enCatalogo = null;
+        let varianteUsada = null;
+        for (const v of variantes) {
+            const hit = window.catalogs.buscar(v);
+            if (hit) { enCatalogo = hit; varianteUsada = v; break; }
+        }
+
         if (enCatalogo) {
-            // ✅ Si tiene material asignado, usar catálogo completo
             if (enCatalogo.material) {
-                console.log('✅ Encontrado en catálogo (con material):', enCatalogo);
+                console.log(`✅ Catálogo (con material) usando variante "${varianteUsada}":`, enCatalogo);
                 return {
                     nombre: enCatalogo.descripcion,
-                    marca: enCatalogo.material ? `Material ${enCatalogo.material}` : 'Sin material',
+                    marca: `Material ${enCatalogo.material}`,
                     material: enCatalogo.material,
                     materialNombre: enCatalogo.materialNombre,
                     matchPuntaje: enCatalogo.matchPuntaje,
@@ -144,10 +181,8 @@ async function buscarProducto(codigo) {
                     origen: 'catalogo'
                 };
             }
-
-            // ✅ Código existe pero SIN material: usar su descripción propia
             if (enCatalogo.descripcion) {
-                console.log('✅ Encontrado en catálogo (sin material, usando descripción):', enCatalogo);
+                console.log(`✅ Catálogo (sin material) usando variante "${varianteUsada}":`, enCatalogo);
                 return {
                     nombre: enCatalogo.descripcion,
                     marca: null,
@@ -161,21 +196,23 @@ async function buscarProducto(codigo) {
         }
     }
 
-    // 2) DB local
-    const productoLocal = database.buscarProducto(codigo);
-    if (productoLocal && productoLocal.descripcion) {
-        console.log('✅ Producto encontrado en DB local:', productoLocal);
-        return {
-            nombre: productoLocal.descripcion,
-            marca: "Base de datos local",
-            material: null,
-            encontrado: true,
-            origen: 'local'
-        };
+    // 2) DB local — probar cada variante
+    for (const v of variantes) {
+        const productoLocal = database.buscarProducto(v);
+        if (productoLocal && productoLocal.descripcion) {
+            console.log(`✅ DB local usando variante "${v}":`, productoLocal);
+            return {
+                nombre: productoLocal.descripcion,
+                marca: "Base de datos local",
+                material: null,
+                encontrado: true,
+                origen: 'local'
+            };
+        }
     }
 
     // 3) No encontrado
-    console.log('❌ Código no encontrado en fuentes locales:', codigo);
+    console.log('❌ Código no encontrado (ni con variantes):', codigo);
     return {
         nombre: null,
         marca: null,
