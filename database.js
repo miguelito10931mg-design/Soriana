@@ -1,4 +1,4 @@
-// database.js - VERSIÓN CORREGIDA v2
+// database.js - VERSIÓN CORREGIDA v4 (FIX #4: UNIQUE con getRowsModified)
 class Database {
     constructor() {
         this.db = null;
@@ -173,6 +173,7 @@ class Database {
         }
     }
 
+    // ✅ FIX #4: usar INSERT OR IGNORE + getRowsModified() en lugar de parsear el mensaje de error
     agregarProductosMasivo(productos) {
         if (this._useLocalStorageFallback || !this.db) {
             if (!this._localStorageData.productos) this._localStorageData.productos = {};
@@ -199,19 +200,30 @@ class Database {
                 const descripcion = item.descripcion?.trim() || 'Sin descripción';
                 if (!codigo) { errores++; continue; }
                 try {
+                    // ✅ FIX #4: INSERT OR IGNORE no lanza excepción en UNIQUE
                     this.db.run(
-                        'INSERT INTO productos (codigo, descripcion, fecha_creacion) VALUES (?, ?, ?)',
+                        'INSERT OR IGNORE INTO productos (codigo, descripcion, fecha_creacion) VALUES (?, ?, ?)',
                         [codigo, descripcion, new Date().toISOString()]
                     );
-                    agregados++;
+                    // ✅ FIX #4: getRowsModified() devuelve 0 si fue ignorado (duplicado)
+                    const modificadas = (typeof this.db.getRowsModified === 'function')
+                        ? this.db.getRowsModified()
+                        : 0;
+                    if (modificadas > 0) agregados++;
+                    else duplicados++;
                 } catch (e) {
-                    if (e.message && e.message.includes('UNIQUE')) duplicados++;
-                    else errores++;
+                    errores++;
                 }
             }
-            this.db.run('COMMIT');
-            this.guardar();
-            return { success: true, agregados, duplicados, errores, total: productos.length };
+            try {
+                this.db.run('COMMIT');
+                this.guardar();
+                return { success: true, agregados, duplicados, errores, total: productos.length };
+            } catch (commitErr) {
+                try { this.db.run('ROLLBACK'); } catch (e) {}
+                console.error('❌ Falló COMMIT, ROLLBACK aplicado:', commitErr);
+                return { success: false, message: 'Error al confirmar transacción: ' + (commitErr.message || 'desconocido') };
+            }
         } catch (error) {
             try { this.db.run('ROLLBACK'); } catch (e) {}
             return { success: false, message: error.message || 'Error en carga masiva' };

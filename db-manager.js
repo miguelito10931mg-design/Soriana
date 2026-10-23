@@ -1,21 +1,47 @@
+// ✅ FIX #1: fallback local de escapeHtml (no depende del orden de carga)
+const escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+    ? window.escapeHtml
+    : function(str) {
+        if (str === null || str === undefined) return '';
+        return String(str).replace(/[&<>"']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === '"') return '&quot;';
+            if (m === "'") return '&#39;';
+            return m;
+        });
+    };
+
 class DBManager {
     constructor(database) {
         this.db = database;
         this._listenerAttached = false;
+        this._bindAbortController = null;
         this.initUI();
     }
 
-    initUI() {
+    // ✅ FIX #8: esperar DB antes de construir UI
+    async initUI() {
+        try {
+            if (this.db && typeof this.db.esperarInicializacion === 'function') {
+                await this.db.esperarInicializacion();
+            }
+        } catch (e) {
+            console.warn('DBManager: DB no lista al inicializar UI:', e);
+        }
         this.createDBManagementUI();
     }
 
     createDBManagementUI() {
         const container = document.getElementById('settingsContent');
-        console.log('🔧 Inicializando DB Manager, container:', container);
-        if (!container) {
-            console.error('❌ No se encontró settingsContent');
-            return;
+        if (!container) { console.error('❌ No se encontró settingsContent'); return; }
+
+        if (this._bindAbortController) {
+            try { this._bindAbortController.abort(); } catch (e) {}
+            this._bindAbortController = null;
         }
+        this._listenerAttached = false;
 
         container.innerHTML = `
             <div class="settings-section">
@@ -143,7 +169,7 @@ class DBManager {
                 <div class="manual-panel">
                     <div class="form-group" style="margin-bottom:8px;">
                         <label>Formato: código,descripción (uno por línea)</label>
-                        <textarea id="dbBulkInput" placeholder="7501234567890,Leche entera Lala 1L&#10;7501234567891,Pan Bimbo 600g&#10;7501234567892,Arroz Morelos 1kg"></textarea>
+                        <textarea id="dbBulkInput" placeholder="7501234567890,Leche entera Lala 1L&#10;7501234567891,Pan Bimbo 600g"></textarea>
                     </div>
                     <button class="btn btn-green" id="dbBulkBtn">
                         <i class="fas fa-file-upload"></i> Cargar múltiples
@@ -200,7 +226,6 @@ class DBManager {
             const icon = document.getElementById('dbStatusIcon');
             const text = document.getElementById('dbStatusText');
             const engine = document.getElementById('dbEngine');
-
             if (stats.usandoSQLite && !stats.usandoFallback) {
                 if (icon) { icon.textContent = '✅'; icon.style.color = 'var(--green)'; }
                 if (text) text.textContent = 'SQLite activo';
@@ -214,16 +239,11 @@ class DBManager {
                 if (text) text.textContent = 'Error en la base de datos';
                 if (engine) engine.textContent = '(Error)';
             }
-        } catch (e) {
-            console.warn('Error al obtener estado:', e);
-        }
+        } catch (e) { console.warn('Error al obtener estado:', e); }
     }
 
     _showModal(options) {
-        if (typeof window.showModal === 'function') {
-            window.showModal(options);
-            return;
-        }
+        if (typeof window.showModal === 'function') { window.showModal(options); return; }
         if (options.actions && options.actions.length) {
             const danger = options.actions.find(a => a.type === 'danger');
             if (danger && danger.action) danger.action();
@@ -233,7 +253,6 @@ class DBManager {
     _refreshCatalogStats() {
         if (!window.catalogs) return;
         const stats = window.catalogs.obtenerStats();
-
         const matCount = document.getElementById('catMatCount');
         const codCount = document.getElementById('catCodCount');
         const conMat = document.getElementById('catConMaterial');
@@ -244,8 +263,7 @@ class DBManager {
 
         if (matCount) {
             const nTar = stats.tarimas || 0;
-            const extra = nTar > 0 ? ` · ${nTar} tarimas` : '';
-            matCount.textContent = `${stats.materiales} registros${extra}`;
+            matCount.textContent = `${stats.materiales} registros${nTar > 0 ? ` · ${nTar} tarimas` : ''}`;
         }
         if (codCount) codCount.textContent = `${stats.codigos} registros`;
         if (conMat) conMat.textContent = stats.conMaterial;
@@ -262,13 +280,8 @@ class DBManager {
     _renderMatchesBajos() {
         const container = document.getElementById('catBajosContainer');
         if (!container || !window.catalogs) return;
-
         const bajos = window.catalogs.obtenerMatchesBajos();
-
-        if (bajos.length === 0) {
-            container.innerHTML = '';
-            return;
-        }
+        if (bajos.length === 0) { container.innerHTML = ''; return; }
 
         let html = `
             <div class="settings-section-title" style="margin-top:12px;">
@@ -279,7 +292,6 @@ class DBManager {
                     Revisa estas coincidencias — quizás el material asignado no sea el correcto.
                 </div>
         `;
-
         bajos.slice(0, 30).forEach(b => {
             const color = b.matchPuntaje >= 75 ? 'var(--yellow)' : 'var(--orange)';
             html += `
@@ -295,16 +307,14 @@ class DBManager {
                 </div>
             `;
         });
-
         if (bajos.length > 30) {
             html += `<div style="padding:8px 0;color:var(--label);font-size:0.72rem;text-align:center;">... y ${bajos.length - 30} más</div>`;
         }
-
         html += '</div>';
         container.innerHTML = html;
     }
 
-    _bindCatalogsEvents() {
+    _bindCatalogsEvents(signal) {
         const matFile = document.getElementById('catMatFile');
         const matUploadBtn = document.getElementById('catMatUploadBtn');
         const matClearBtn = document.getElementById('catMatClearBtn');
@@ -314,7 +324,7 @@ class DBManager {
         const clearAllBtn = document.getElementById('catClearAllBtn');
 
         if (matUploadBtn && matFile) {
-            matUploadBtn.addEventListener('click', () => matFile.click());
+            matUploadBtn.addEventListener('click', () => matFile.click(), { signal });
             matFile.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -325,13 +335,16 @@ class DBManager {
                         let msg = `✅ ${res.agregados} materiales`;
                         if (res.tarimas > 0) msg += ` · ${res.tarimas} tarimas`;
                         showToast(msg, 'success');
-
+                        if (res.tarimasPreservadas && res.tarimasPreservadas > 0) {
+                            showToast(`ℹ️ Archivo sin "referencia": se conservaron ${res.tarimasPreservadas} tarimas previas`, 'warning');
+                        }
                         const st = document.getElementById('catMatStatus');
                         if (st) {
                             let txt = `Última carga: ${file.name} · ${res.agregados} registros`;
                             if (res.errores > 0) txt += ` (${res.errores} errores)`;
                             if (res.tarimas > 0) txt += ` · ${res.tarimas} tarimas`;
                             if (res.filasSinTarima > 0) txt += ` · ${res.filasSinTarima} sin referencia`;
+                            if (res.tarimasPreservadas > 0) txt += ` · ${res.tarimasPreservadas} tarimas preservadas`;
                             st.textContent = txt;
                         }
                     } else {
@@ -343,18 +356,14 @@ class DBManager {
                     showToast(`❌ Error: ${err.message}`, 'error');
                 }
                 matFile.value = '';
-            });
+            }, { signal });
         }
 
         if (matClearBtn) {
             matClearBtn.addEventListener('click', () => {
-                if (window.catalogs.stats.materiales === 0) {
-                    showToast('No hay materiales cargados', 'warning');
-                    return;
-                }
+                if (window.catalogs.stats.materiales === 0) { showToast('No hay materiales cargados', 'warning'); return; }
                 this._showModal({
-                    icon: 'exclamation-triangle',
-                    iconType: 'warning',
+                    icon: 'exclamation-triangle', iconType: 'warning',
                     title: 'Limpiar materiales',
                     message: `Se eliminarán ${window.catalogs.stats.materiales} materiales y sus ${window.catalogs.stats.tarimas || 0} tarimas derivadas.`,
                     actions: [
@@ -366,11 +375,11 @@ class DBManager {
                         { text: 'Cancelar', type: 'cancel' }
                     ]
                 });
-            });
+            }, { signal });
         }
 
         if (codUploadBtn && codFile) {
-            codUploadBtn.addEventListener('click', () => codFile.click());
+            codUploadBtn.addEventListener('click', () => codFile.click(), { signal });
             codFile.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -387,27 +396,21 @@ class DBManager {
                             if (res.sinCodigo > 0) extra += ` · ${res.sinCodigo} sin código detectado`;
                             st.textContent = `Última carga: ${file.name} · ${extra}`;
                         }
-                    } else {
-                        showToast(`❌ ${res.message}`, 'error');
-                    }
+                    } else showToast(`❌ ${res.message}`, 'error');
                     this._refreshCatalogStats();
                 } catch (err) {
                     console.error('Error al cargar códigos:', err);
                     showToast(`❌ Error: ${err.message}`, 'error');
                 }
                 codFile.value = '';
-            });
+            }, { signal });
         }
 
         if (codClearBtn) {
             codClearBtn.addEventListener('click', () => {
-                if (window.catalogs.stats.codigos === 0) {
-                    showToast('No hay códigos cargados', 'warning');
-                    return;
-                }
+                if (window.catalogs.stats.codigos === 0) { showToast('No hay códigos cargados', 'warning'); return; }
                 this._showModal({
-                    icon: 'exclamation-triangle',
-                    iconType: 'warning',
+                    icon: 'exclamation-triangle', iconType: 'warning',
                     title: 'Limpiar códigos',
                     message: `Se eliminarán ${window.catalogs.stats.codigos} códigos.`,
                     actions: [
@@ -419,14 +422,13 @@ class DBManager {
                         { text: 'Cancelar', type: 'cancel' }
                     ]
                 });
-            });
+            }, { signal });
         }
 
         if (clearAllBtn) {
             clearAllBtn.addEventListener('click', () => {
                 this._showModal({
-                    icon: 'exclamation-triangle',
-                    iconType: 'warning',
+                    icon: 'exclamation-triangle', iconType: 'warning',
                     title: 'Limpiar TODOS los catálogos',
                     message: 'Se eliminarán materiales, códigos y tarimas. El inventario no se toca.',
                     actions: [
@@ -438,22 +440,19 @@ class DBManager {
                         { text: 'Cancelar', type: 'cancel' }
                     ]
                 });
-            });
+            }, { signal });
         }
 
-        // Slider de umbral
         const umbralSlider = document.getElementById('catUmbralSlider');
         if (umbralSlider) {
             umbralSlider.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
                 const valEl = document.getElementById('catUmbralVal');
-                if (valEl) valEl.textContent = val + '%';
-            });
+                if (valEl) valEl.textContent = parseInt(e.target.value) + '%';
+            }, { signal });
             umbralSlider.addEventListener('change', (e) => {
                 const val = parseInt(e.target.value);
                 window.catalogs.ajustarUmbral(val);
                 showToast(`🎚️ Sensibilidad: ${val}%`, 'success');
-
                 if (window.catalogs.stats.codigos > 0 && window.catalogs.stats.materiales > 0) {
                     showToast('🔄 Recalculando cruces...', 'success');
                     setTimeout(() => {
@@ -462,14 +461,19 @@ class DBManager {
                         showToast(`✅ ${actualizados} cruces actualizados`, 'success');
                     }, 100);
                 }
-            });
+            }, { signal });
         }
     }
 
     bindEvents() {
         if (this._listenerAttached) return;
-
-        this._bindCatalogsEvents();
+        this._listenerAttached = true;
+        if (this._bindAbortController) {
+            try { this._bindAbortController.abort(); } catch (e) {}
+        }
+        this._bindAbortController = new AbortController();
+        const signal = this._bindAbortController.signal;
+        this._bindCatalogsEvents(signal);
 
         const addBtn = document.getElementById('dbAddSingleBtn');
         if (addBtn) {
@@ -478,23 +482,16 @@ class DBManager {
                 const descInput = document.getElementById('dbDescInput');
                 const codigo = codeInput.value.trim();
                 const descripcion = descInput.value.trim();
-
-                if (!codigo) {
-                    if (typeof showToast === 'function') showToast('Ingresa un código de barras', 'error');
-                    return;
-                }
-
+                if (!codigo) { if (typeof showToast === 'function') showToast('Ingresa un código de barras', 'error'); return; }
                 const result = this.db.agregarProducto(codigo, descripcion);
                 if (result.success) {
                     if (typeof showToast === 'function') showToast(`✅ ${result.message}`, 'success');
-                    codeInput.value = '';
-                    descInput.value = '';
-                    this.refreshUI();
-                    this.actualizarEstado();
+                    codeInput.value = ''; descInput.value = '';
+                    this.refreshUI(); this.actualizarEstado();
                 } else {
                     if (typeof showToast === 'function') showToast(`❌ ${result.message}`, 'error');
                 }
-            });
+            }, { signal });
         }
 
         const bulkBtn = document.getElementById('dbBulkBtn');
@@ -502,99 +499,77 @@ class DBManager {
             bulkBtn.addEventListener('click', () => {
                 const bulkInput = document.getElementById('dbBulkInput');
                 const text = bulkInput.value.trim();
-                if (!text) {
-                    if (typeof showToast === 'function') showToast('Ingresa datos en el formato correcto', 'warning');
-                    return;
-                }
-                const lines = text.split('\n').filter(line => line.trim());
-                const productos = lines.map(line => {
+                if (!text) { if (typeof showToast === 'function') showToast('Ingresa datos', 'warning'); return; }
+                const productos = text.split('\n').filter(l => l.trim()).map(line => {
                     const parts = line.split(',').map(p => p.trim());
-                    return {
-                        codigo: parts[0],
-                        descripcion: parts.slice(1).join(', ') || 'Sin descripción'
-                    };
+                    return { codigo: parts[0], descripcion: parts.slice(1).join(', ') || 'Sin descripción' };
                 });
                 const result = this.db.agregarProductosMasivo(productos);
                 if (typeof showToast === 'function') {
-                    showToast(
-                        `✅ Agregados: ${result.agregados} | Duplicados: ${result.duplicados} | Errores: ${result.errores}`,
-                        result.agregados > 0 ? 'success' : 'warning'
-                    );
+                    if (result.success === false) showToast(`❌ ${result.message}`, 'error');
+                    else showToast(`✅ Agregados: ${result.agregados} | Duplicados: ${result.duplicados} | Errores: ${result.errores}`, result.agregados > 0 ? 'success' : 'warning');
                 }
                 bulkInput.value = '';
-                this.refreshUI();
-                this.actualizarEstado();
-            });
+                this.refreshUI(); this.actualizarEstado();
+            }, { signal });
         }
 
         const exportBtn = document.getElementById('dbExportBtn');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
                 const csv = this.db.exportarCSV();
-                if (!csv) {
-                    if (typeof showToast === 'function') showToast('No hay datos para exportar', 'warning');
-                    return;
-                }
+                if (!csv) { if (typeof showToast === 'function') showToast('No hay datos para exportar', 'warning'); return; }
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.href = url;
                 link.setAttribute('download', `productos_db_${new Date().toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 if (typeof showToast === 'function') showToast('📥 Base de datos exportada', 'success');
-            });
+            }, { signal });
         }
 
         const importBtn = document.getElementById('dbImportBtn');
         const fileInput = document.getElementById('dbFileInput');
         if (importBtn && fileInput) {
-            importBtn.addEventListener('click', () => fileInput.click());
+            importBtn.addEventListener('click', () => fileInput.click(), { signal });
             fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const csv = event.target.result;
-                    const result = this.db.importarCSV(csv);
+                    const result = this.db.importarCSV(event.target.result);
                     if (result.success) {
                         if (typeof showToast === 'function') showToast(`✅ Importados: ${result.agregados} productos`, 'success');
-                        this.refreshUI();
-                        this.actualizarEstado();
+                        this.refreshUI(); this.actualizarEstado();
                     } else {
                         if (typeof showToast === 'function') showToast(`❌ ${result.message}`, 'error');
                     }
                     fileInput.value = '';
                 };
                 reader.readAsText(file);
-            });
+            }, { signal });
         }
 
         const clearBtn = document.getElementById('dbClearBtn');
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
-                if (this.db.contarProductos() === 0) {
-                    if (typeof showToast === 'function') showToast('La base de datos ya está vacía', 'warning');
-                    return;
-                }
+                if (this.db.contarProductos() === 0) { if (typeof showToast === 'function') showToast('La base de datos ya está vacía', 'warning'); return; }
                 this._showModal({
-                    icon: 'exclamation-triangle',
-                    iconType: 'warning',
+                    icon: 'exclamation-triangle', iconType: 'warning',
                     title: '¿Limpiar base de datos?',
                     message: `Se eliminarán ${this.db.contarProductos()} productos. Esta acción no se puede deshacer.`,
                     actions: [
                         { text: 'Limpiar todo', type: 'danger', action: () => {
                             this.db.limpiarDB();
                             if (typeof showToast === 'function') showToast('🗑️ Base de datos limpiada', 'success');
-                            this.refreshUI();
-                            this.actualizarEstado();
+                            this.refreshUI(); this.actualizarEstado();
                         }},
                         { text: 'Cancelar', type: 'cancel' }
                     ]
                 });
-            });
+            }, { signal });
         }
 
         const listContainer = document.getElementById('dbProductList');
@@ -605,31 +580,35 @@ class DBManager {
                 e.stopPropagation();
                 const codigo = btn.getAttribute('data-code');
                 if (!codigo) return;
-
                 this._showModal({
-                    icon: 'trash',
-                    iconType: 'warning',
+                    icon: 'trash', iconType: 'warning',
                     title: 'Eliminar producto',
                     message: `¿Eliminar el producto con código "${codigo}"?`,
                     actions: [
                         { text: 'Eliminar', type: 'danger', action: () => {
                             this.db.eliminarProducto(codigo);
                             if (typeof showToast === 'function') showToast('Producto eliminado', 'success');
-                            this.refreshUI();
-                            this.actualizarEstado();
+                            this.refreshUI(); this.actualizarEstado();
                         }},
                         { text: 'Cancelar', type: 'cancel' }
                     ]
                 });
-            });
+            }, { signal });
         }
-
-        this._listenerAttached = true;
     }
 
+    // ✅ FIX #8: refreshUI resiliente si DB aún no responde
     refreshUI() {
         if (!this.db) return;
-        const productos = this.db.obtenerProductosArray();
+        let productos = [];
+        try {
+            productos = this.db.obtenerProductosArray() || [];
+        } catch (e) {
+            console.warn('refreshUI: DB aún no lista, reintentando en 300ms', e);
+            setTimeout(() => this.refreshUI(), 300);
+            return;
+        }
+
         const totalEl = document.getElementById('dbTotalCount');
         if (totalEl) totalEl.textContent = productos.length;
 
@@ -645,9 +624,8 @@ class DBManager {
             return;
         }
 
-        const lastProducts = productos.slice(-20).reverse();
         let html = '';
-        lastProducts.forEach(p => {
+        productos.slice(-20).reverse().forEach(p => {
             html += `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--separator);font-size:0.85rem;gap:10px;">
                     <div style="min-width:0;flex:1;">
@@ -660,11 +638,9 @@ class DBManager {
                 </div>
             `;
         });
-
         if (productos.length > 20) {
             html += `<div style="padding:10px 0;color:var(--label);font-size:0.78rem;text-align:center;">... y ${productos.length - 20} más</div>`;
         }
-
         listContainer.innerHTML = html;
     }
 }
