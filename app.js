@@ -470,7 +470,9 @@ async function iniciarScanner() {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
 
         isScanning = true;
-        ScannerState.deactivate(); // el láser no debe escanear con la cámara activa
+        // ✅ Opción A: bloquear SOLO el láser mientras la cámara está activa.
+        // No se desactiva el modo para que canScan('camera') siga devolviendo true.
+        ScannerState.block('camara');
         showToast("📷 Cámara activada - Escanea códigos QR", "success");
 
         const startBtn = document.getElementById("startScannerBtn");
@@ -514,17 +516,18 @@ async function iniciarScanner() {
         if (modeLabel) modeLabel.textContent = 'Láser';
         if (modeSub) modeSub.textContent = 'Activo · Listo para escanear';
         if (dot) dot.classList.remove('blue');
-        ScannerState.activate();
+        ScannerState.unblock('camara');
     }
 }
 
 function onScanSuccess(decodedText, decodedResult) {
-    if (!ScannerState.canScan()) return;
+    // ✅ Opción A: la cámara consulta canScan('camera'), que ignora el bloqueo 'camara'
+    if (!ScannerState.canScan('camera')) return;
 
     const codigo = String(decodedText || '').trim();
     if (codigo.length < 3) return;
 
-    if (!ScannerState.notifyScan(codigo)) return;
+    if (!ScannerState.notifyScan(codigo, 'camera')) return;
 
     const lastEl = document.getElementById("lastScanned");
     if (lastEl) lastEl.innerHTML = escapeHtml(codigo);
@@ -563,7 +566,8 @@ async function detenerScanner() {
         if (modeLabel) modeLabel.textContent = 'Láser';
         if (modeSub) modeSub.textContent = 'Activo · Listo para escanear';
         if (dot) dot.classList.remove('blue');
-        ScannerState.activate();
+        // ✅ Opción A: desbloquear el láser (sin tocar mode)
+        ScannerState.unblock('camara');
     }
 }
 
