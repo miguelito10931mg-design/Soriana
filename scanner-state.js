@@ -51,7 +51,20 @@
 
     function isBlocked() { return state.blockedBy !== null && state.blockedBy.size > 0; }
     function canFocus() { return state.mode === 'active' && !isBlocked() && !isUserTyping(); }
-    function canScan() { return state.mode === 'active' && !isBlocked() && !state.processing; }
+
+    // ✅ canScan por origen:
+    //    - 'laser' / 'any': requiere mode active, sin bloqueos, sin processing
+    //    - 'camera': requiere mode active, sin processing, e ignora el bloqueo 'camara'
+    function canScan(origen = 'any') {
+        if (state.mode !== 'active') return false;
+        if (state.processing) return false;
+        if (!isBlocked()) return true;
+        if (origen === 'camera') {
+            const bloqueosQueAplican = Array.from(state.blockedBy).filter(r => r !== 'camara');
+            return bloqueosQueAplican.length === 0;
+        }
+        return false;
+    }
 
     function clearBuffer() {
         state.buffer = '';
@@ -177,10 +190,10 @@
             }, CONFIG.UNBLOCK_DELAY_MS);
         },
 
-        canScan() { return canScan(); },
+        canScan(origen = 'any') { return canScan(origen); },
 
-        notifyScan(codigo) {
-            if (!canScan()) return false;
+        notifyScan(codigo, origen = 'any') {
+            if (!canScan(origen)) return false;
             const now = Date.now();
             if (now - state.lastScanAt < CONFIG.SCAN_DEBOUNCE_MS) return false;
             state.lastScanAt = now;
@@ -196,7 +209,7 @@
         },
 
         _dispatch(codigo, origen) {
-            if (!this.notifyScan(codigo)) return;
+            if (!this.notifyScan(codigo, 'laser')) return;
             if (state.onScan) {
                 try { state.onScan(codigo, origen); } catch (e) { console.error('onScan error:', e); }
             }
@@ -209,7 +222,8 @@
                 buffer: state.buffer,
                 processing: state.processing,
                 activeElement: document.activeElement ? (document.activeElement.id || document.activeElement.tagName) : null,
-                canScan: canScan(),
+                canScanLaser: canScan('laser'),
+                canScanCamera: canScan('camera'),
                 canFocus: canFocus(),
             };
         },
