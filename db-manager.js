@@ -1,5 +1,5 @@
-// ✅ FIX #1: fallback local de escapeHtml (no depende del orden de carga)
-const escapeHtml = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
+// ✅ FIX: usar _esc para no chocar con window.escapeHtml de app.js
+const _esc = (typeof window !== 'undefined' && typeof window.escapeHtml === 'function')
     ? window.escapeHtml
     : function(str) {
         if (str === null || str === undefined) return '';
@@ -21,7 +21,6 @@ class DBManager {
         this.initUI();
     }
 
-    // ✅ FIX #8: esperar DB antes de construir UI
     async initUI() {
         try {
             if (this.db && typeof this.db.esperarInicializacion === 'function') {
@@ -297,12 +296,12 @@ class DBManager {
             html += `
                 <div style="padding:8px 0;border-bottom:0.5px solid var(--separator);font-size:0.78rem;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                        <span style="color:var(--label);font-family:'SF Mono',monospace;">${escapeHtml(b.codigo)}</span>
+                        <span style="color:var(--label);font-family:'SF Mono',monospace;">${_esc(b.codigo)}</span>
                         <span style="color:${color};font-weight:700;">${b.matchPuntaje}%</span>
                     </div>
-                    <div style="color:var(--text);margin-bottom:2px;">${escapeHtml(b.descripcion)}</div>
+                    <div style="color:var(--text);margin-bottom:2px;">${_esc(b.descripcion)}</div>
                     <div style="color:var(--purple);font-size:0.72rem;">
-                        → ${escapeHtml(b.material)} · ${escapeHtml(b.materialNombre || '')}
+                        → ${_esc(b.material)} · ${_esc(b.materialNombre || '')}
                     </div>
                 </div>
             `;
@@ -597,7 +596,6 @@ class DBManager {
         }
     }
 
-    // ✅ FIX #8: refreshUI resiliente si DB aún no responde
     refreshUI() {
         if (!this.db) return;
         let productos = [];
@@ -629,10 +627,10 @@ class DBManager {
             html += `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--separator);font-size:0.85rem;gap:10px;">
                     <div style="min-width:0;flex:1;">
-                        <div style="font-weight:600;color:var(--text);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.descripcion || 'Sin descripción')}</div>
-                        <div style="color:var(--teal);font-size:0.72rem;font-family:'SF Mono',monospace;letter-spacing:0.3px;">${escapeHtml(p.codigo)}</div>
+                        <div style="font-weight:600;color:var(--text);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(p.descripcion || 'Sin descripción')}</div>
+                        <div style="color:var(--teal);font-size:0.72rem;font-family:'SF Mono',monospace;letter-spacing:0.3px;">${_esc(p.codigo)}</div>
                     </div>
-                    <button class="db-delete-btn" data-code="${escapeHtml(p.codigo)}" style="background:var(--surface-2);border:0.5px solid var(--separator);width:34px;height:34px;border-radius:8px;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-appearance:none;">
+                    <button class="db-delete-btn" data-code="${_esc(p.codigo)}" style="background:var(--surface-2);border:0.5px solid var(--separator);width:34px;height:34px;border-radius:8px;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-appearance:none;">
                         <i class="fas fa-trash" style="font-size:0.75rem;"></i>
                     </button>
                 </div>
