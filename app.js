@@ -47,16 +47,7 @@ let laserActive = true;
 // ===== SESIÓN DE TARIMA ACTIVA =====
 let tarimaActiva = null;
 
-const READER_ORIGINAL_HTML = `
-    <div class="scan-overlay"></div>
-    <div class="scan-line"></div>
-    <div class="scanner-placeholder">
-        <div class="scanner-placeholder-icon">
-            <i class="fas fa-bolt"></i>
-        </div>
-        <p>Apunta y escanea</p>
-    </div>
-`;
+const READER_ORIGINAL_HTML = `<div class="scan-overlay"></div> <div class="scan-line"></div> <div class="scanner-placeholder"> <div class="scanner-placeholder-icon"> <i class="fas fa-bolt"></i> </div> <p>Apunta y escanea</p> </div>`;
 
 // ===== FUNCIONES PRINCIPALES =====
 function cargarDatos() {
@@ -115,7 +106,6 @@ function actualizarEstadisticas() {
     const tc = document.getElementById("totalCajasSum");
     if (tp) tp.innerText = totalProductos;
     if (tc) tc.innerText = totalCajas;
-
     const badge = document.getElementById('tabBadgeCount');
     if (badge) {
         badge.textContent = totalProductos > 99 ? '99+' : totalProductos;
@@ -128,13 +118,13 @@ function generarVariantesCodigo(codigo) {
     const base = String(codigo).trim();
     const set = new Set();
     set.add(base);
-    const limpio = base.replace(/[\s\-]/g, '');
+    const limpio = base.replace(/[\s-]/g, '');
     if (limpio) set.add(limpio);
     if (base.startsWith('0') && base.length > 1) set.add(base.slice(1));
     if (limpio.startsWith('0') && limpio.length > 1) set.add(limpio.slice(1));
     if (!base.startsWith('0')) set.add('0' + base);
     if (!limpio.startsWith('0')) set.add('0' + limpio);
-    Array.from(set).forEach(v => { set.add(v.replace(/[\s\-]/g, '')); });
+    Array.from(set).forEach(v => { set.add(v.replace(/[\s-]/g, '')); });
     return Array.from(set).filter(v => v.length >= 3);
 }
 window.generarVariantesCodigo = generarVariantesCodigo;
@@ -153,7 +143,6 @@ window.encontrarCodigoExistenteEnProductos = encontrarCodigoExistenteEnProductos
 async function buscarProducto(codigo) {
     await database.esperarInicializacion();
     const variantes = generarVariantesCodigo(codigo);
-
     if (window.catalogs) {
         let enCatalogo = null;
         for (const v of variantes) {
@@ -181,24 +170,22 @@ async function buscarProducto(codigo) {
             }
         }
     }
-
     for (const v of variantes) {
         const productoLocal = database.buscarProducto(v);
         if (productoLocal && productoLocal.descripcion) {
             return { nombre: productoLocal.descripcion, marca: "Base de datos local", material: null, encontrado: true, origen: 'local' };
         }
     }
-
     return { nombre: null, marca: null, material: null, encontrado: false, origen: 'none' };
 }
 
 // ===== AGREGAR PRODUCTO CON CANTIDAD =====
+// ✅ FIX #5: sin toast "Buscando..." molesto
 async function agregarProductoConBusqueda(codigo, cantidadCajas) {
     if (!codigo || String(codigo).trim() === "") {
         showToast("Código inválido", "error");
         return false;
     }
-
     codigo = String(codigo).trim();
     let cant = parseInt(cantidadCajas, 10);
     if (isNaN(cant) || cant < 1) {
@@ -208,14 +195,11 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
         cant = 1;
     }
     if (cant > MAX_CAJAS_POR_ESCANEO) cant = MAX_CAJAS_POR_ESCANEO;
-
-    showToast(`🔍 Buscando ${codigo}...`, "success");
-
+    
+    // ✅ FIX #5: eliminado el toast "Buscando..."
     const infoProducto = await buscarProducto(codigo);
-
     let nombreProducto = null, marcaProducto = null, materialProducto = null;
     let materialNombreProducto = null, matchPuntajeProducto = null;
-
     if (infoProducto.encontrado) {
         nombreProducto = infoProducto.nombre;
         marcaProducto = infoProducto.marca;
@@ -223,7 +207,6 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
         materialNombreProducto = infoProducto.materialNombre || null;
         matchPuntajeProducto = infoProducto.matchPuntaje || null;
     }
-
     if (!nombreProducto) {
         const codExistenteFallback = encontrarCodigoExistenteEnProductos(codigo);
         if (codExistenteFallback && productos[codExistenteFallback].nombre) {
@@ -232,9 +215,7 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
             nombreProducto = `Producto ${codigo}`;
         }
     }
-
     const codigoExistente = encontrarCodigoExistenteEnProductos(codigo);
-
     if (codigoExistente) {
         return await mostrarModalCantidad(
             codigoExistente,
@@ -259,24 +240,18 @@ async function agregarProductoConBusqueda(codigo, cantidadCajas) {
 function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombreNuevo, marcaNueva, materialNuevo, materialNombreNuevo, matchPuntaje, cantidadInicial) {
     return new Promise((resolve) => {
         ScannerState.block('modal');
-
         const existing = document.querySelector('.modal-overlay');
         if (existing) existing.remove();
-
         let cantidad = Math.max(1, parseInt(cantidadInicial, 10) || 1);
-
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
-
         const titulo = esExistente ? 'Agregar cajas' : 'Producto encontrado';
         const mensaje = esExistente
             ? `Actual: ${cantidadActual} cajas. ¿Cuántas agregar?`
             : `¿Cuántas cajas de este producto?`;
-
         const materialMostrar = materialNuevo || (productos[codigo] && productos[codigo].material) || null;
         const materialNombreMostrar = materialNombreNuevo || (productos[codigo] && productos[codigo].materialNombre) || null;
         const puntajeMostrar = matchPuntaje || (productos[codigo] && productos[codigo].matchPuntaje) || null;
-
         let calidadBadge = '';
         if (puntajeMostrar) {
             let color = 'var(--green)';
@@ -287,7 +262,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 <i class="fas ${icono}"></i> ${puntajeMostrar}%
             </span>`;
         }
-
         const materialHtml = materialMostrar
             ? `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
                    <span style="color:var(--label);font-size:0.8rem;">🔢 Material ${calidadBadge}</span>
@@ -297,7 +271,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
             : `<div style="padding:6px 0;border-bottom:0.5px solid var(--separator);margin-bottom:6px;">
                    <span style="color:var(--orange);font-size:0.8rem;">⚠️ Sin material asignado</span>
                </div>`;
-
         const tarimaBadge = tarimaActiva
             ? `<div style="display:flex;justify-content:center;margin-bottom:10px;">
                    <span style="background:rgba(10,132,255,0.15);color:var(--blue-bright);padding:4px 12px;border-radius:100px;font-size:0.72rem;font-weight:700;letter-spacing:0.4px;">
@@ -305,7 +278,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                    </span>
                </div>`
             : '';
-
         overlay.innerHTML = `
             <div class="modal-sheet">
                 <div class="modal-handle"></div>
@@ -338,13 +310,10 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 </div>
             </div>
         `;
-
         document.body.appendChild(overlay);
         void overlay.offsetWidth;
         overlay.classList.add('active');
-
         const valEl = document.getElementById('modalStepValue');
-
         document.getElementById('modalStepDown').addEventListener('click', () => {
             if (cantidad > 1) {
                 cantidad--;
@@ -355,7 +324,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 }
             }
         });
-
         document.getElementById('modalStepUp').addEventListener('click', () => {
             if (cantidad < MAX_CAJAS_POR_ESCANEO) {
                 cantidad++;
@@ -366,10 +334,8 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                 }
             }
         });
-
         let resolvio = false;
         let escHandler = null;
-
         function cerrarModal(resuelto = false) {
             if (resolvio) return;
             resolvio = true;
@@ -381,7 +347,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
             }, 300);
             resolve(resuelto);
         }
-
         document.getElementById('modalConfirm').addEventListener('click', () => {
             if (esExistente) {
                 productos[codigo].cantidadCajas = (productos[codigo].cantidadCajas || 0) + cantidad;
@@ -405,7 +370,6 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                     timestamp: new Date().toISOString()
                 };
             }
-
             if (tarimaActiva) {
                 if (!tarimaActiva.escaneos[codigo]) {
                     tarimaActiva.escaneos[codigo] = {
@@ -413,7 +377,11 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                         material: materialMostrar,
                         materialNombre: materialNombreMostrar,
                         tarimaPrevia: (productos[codigo] && productos[codigo].tarima && productos[codigo].tarima !== tarimaActiva.id)
-                            ? productos[codigo].tarima : null
+                            ? productos[codigo].tarima : null,
+                        // ✅ FIX #3: guardar estado previo de material para restaurar al cancelar
+                        materialPrevia: productos[codigo] && productos[codigo].material ? productos[codigo].material : null,
+                        materialNombrePrevia: productos[codigo] && productos[codigo].materialNombre ? productos[codigo].materialNombre : null,
+                        matchPuntajePrevia: productos[codigo] && productos[codigo].matchPuntaje != null ? productos[codigo].matchPuntaje : null
                     };
                 }
                 tarimaActiva.escaneos[codigo].cajas = (tarimaActiva.escaneos[codigo].cajas || 0) + cantidad;
@@ -428,16 +396,13 @@ function mostrarModalCantidad(codigo, nombre, cantidadActual, esExistente, nombr
                     showToast(`📦 ${nombre}${matMsg} | ${cantidad} caja(s)`);
                 }
             }
-
             guardarDatos();
             renderizarProductos();
             actualizarEstadisticas();
             cerrarModal(true);
         });
-
         document.getElementById('modalCancel').addEventListener('click', () => cerrarModal(false));
         overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarModal(false); });
-
         escHandler = (e) => { if (e.key === 'Escape') cerrarModal(false); };
         document.addEventListener('keydown', escHandler);
     });
@@ -448,39 +413,29 @@ async function iniciarScanner() {
     try {
         const readerElement = document.getElementById("reader");
         if (!readerElement) { showToast("Error: No se encontró el elemento de escáner", "error"); return; }
-
         if (typeof Html5Qrcode === 'undefined') {
             showToast("Error: Librería QR no cargada. Recarga la página.", "error");
             return;
         }
-
         if (html5QrCode) {
             try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e) {}
             html5QrCode = null;
         }
-
         readerElement.innerHTML = '';
         readerElement.style.background = '#000';
         readerElement.style.minHeight = '300px';
         readerElement.style.position = 'relative';
-
         html5QrCode = new Html5Qrcode("reader");
         const config = { fps: 10, qrbox: { width: 250, height: 200 } };
-
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanError);
-
         isScanning = true;
-        // ✅ Opción A: bloquear SOLO el láser mientras la cámara está activa.
-        // No se desactiva el modo para que canScan('camera') siga devolviendo true.
         ScannerState.block('camara');
         showToast("📷 Cámara activada - Escanea códigos QR", "success");
-
         const startBtn = document.getElementById("startScannerBtn");
         if (startBtn) {
             startBtn.innerHTML = '<i class="fas fa-stop"></i> Detener';
             startBtn.style.background = 'var(--red)';
         }
-
         laserActive = false;
         const modeLabel = document.getElementById('scannerModeLabel');
         const modeSub = document.getElementById('scannerModeSub');
@@ -488,27 +443,22 @@ async function iniciarScanner() {
         if (modeLabel) modeLabel.textContent = 'Cámara';
         if (modeSub) modeSub.textContent = 'Escaneando en vivo';
         if (dot) dot.classList.add('blue');
-
     } catch (err) {
         console.error("Error al iniciar cámara:", err);
         let errorMsg = "No se pudo acceder a la cámara";
         if (err.message && err.message.includes('NotAllowedError')) errorMsg = "Permiso de cámara denegado.";
         else if (err.message && err.message.includes('NotFoundError')) errorMsg = "No se encontró cámara.";
         else if (err.message && err.message.includes('NotReadableError')) errorMsg = "La cámara está siendo usada por otra app.";
-
         showToast("❌ " + errorMsg, "error");
         isScanning = false;
         html5QrCode = null;
-
         const readerElement = document.getElementById("reader");
         if (readerElement) readerElement.innerHTML = READER_ORIGINAL_HTML;
-
         const startBtn = document.getElementById("startScannerBtn");
         if (startBtn) {
             startBtn.innerHTML = '<i class="fas fa-camera"></i> Cámara';
             startBtn.style.background = 'var(--blue)';
         }
-
         laserActive = true;
         const modeLabel = document.getElementById('scannerModeLabel');
         const modeSub = document.getElementById('scannerModeSub');
@@ -521,17 +471,12 @@ async function iniciarScanner() {
 }
 
 function onScanSuccess(decodedText, decodedResult) {
-    // ✅ Opción A: la cámara consulta canScan('camera'), que ignora el bloqueo 'camara'
     if (!ScannerState.canScan('camera')) return;
-
     const codigo = String(decodedText || '').trim();
     if (codigo.length < 3) return;
-
     if (!ScannerState.notifyScan(codigo, 'camera')) return;
-
     const lastEl = document.getElementById("lastScanned");
     if (lastEl) lastEl.innerHTML = escapeHtml(codigo);
-
     agregarProductoConBusqueda(codigo, 1).finally(() => {
         ScannerState.finishScan();
     });
@@ -549,16 +494,13 @@ async function detenerScanner() {
         isScanning = false;
         html5QrCode = null;
         showToast("📷 Cámara detenida", "success");
-
         const readerElement = document.getElementById("reader");
         if (readerElement) readerElement.innerHTML = READER_ORIGINAL_HTML;
-
         const startBtn = document.getElementById("startScannerBtn");
         if (startBtn) {
             startBtn.innerHTML = '<i class="fas fa-camera"></i> Cámara';
             startBtn.style.background = 'var(--blue)';
         }
-
         laserActive = true;
         const modeLabel = document.getElementById('scannerModeLabel');
         const modeSub = document.getElementById('scannerModeSub');
@@ -566,7 +508,6 @@ async function detenerScanner() {
         if (modeLabel) modeLabel.textContent = 'Láser';
         if (modeSub) modeSub.textContent = 'Activo · Listo para escanear';
         if (dot) dot.classList.remove('blue');
-        // ✅ Opción A: desbloquear el láser (sin tocar mode)
         ScannerState.unblock('camara');
     }
 }
@@ -578,7 +519,6 @@ function iniciarTarima(idTarima) {
     if (!idTarima) { showToast('Selecciona una tarima', 'error'); return; }
     const tarimaRef = window.catalogs?.obtenerTarima(idTarima);
     if (!tarimaRef) { showToast(`❌ Tarima ${idTarima} no está en el archivo de referencia`, 'error'); return; }
-
     const idUpper = idTarima.toUpperCase();
     if (tarimaActiva && tarimaActiva.id !== idUpper) {
         showModal({
@@ -599,7 +539,6 @@ function iniciarTarima(idTarima) {
         });
         return;
     }
-
     tarimaActiva = { id: idUpper, inicio: new Date().toISOString(), escaneos: {} };
     guardarTarimaActiva();
     actualizarBannerTarima();
@@ -608,9 +547,9 @@ function iniciarTarima(idTarima) {
     ScannerState.activate();
 }
 
+// ✅ FIX #3: cancelarTarima ahora restaura material, materialNombre y matchPuntaje previos
 function cancelarTarima() {
     if (!tarimaActiva) return;
-
     const nSKUs = Object.keys(tarimaActiva.escaneos).length;
     showModal({
         icon: 'exclamation-triangle', iconType: 'warning',
@@ -623,8 +562,21 @@ function cancelarTarima() {
                         const cajasItem = Number(item.cajas) || 0;
                         const actuales = Number(productos[cod].cantidadCajas) || 0;
                         productos[cod].cantidadCajas = actuales - cajasItem;
-                        if (productos[cod].cantidadCajas <= 0) delete productos[cod];
-                        else if (productos[cod].tarima === tarimaActiva.id) {
+                        // ✅ FIX #3: restaurar material previo si existía
+                        if (item.materialPrevia !== undefined) {
+                            if (item.materialPrevia === null) {
+                                delete productos[cod].material;
+                                delete productos[cod].materialNombre;
+                                delete productos[cod].matchPuntaje;
+                            } else {
+                                productos[cod].material = item.materialPrevia;
+                                productos[cod].materialNombre = item.materialNombrePrevia || null;
+                                productos[cod].matchPuntaje = item.matchPuntajePrevia != null ? item.matchPuntajePrevia : null;
+                            }
+                        }
+                        if (productos[cod].cantidadCajas <= 0) {
+                            delete productos[cod];
+                        } else if (productos[cod].tarima === tarimaActiva.id) {
                             if (item.tarimaPrevia) productos[cod].tarima = item.tarimaPrevia;
                             else delete productos[cod].tarima;
                         }
@@ -650,27 +602,22 @@ function actualizarBannerTarima() {
         document.getElementById('tarimaBannerInv')
     ].filter(Boolean);
     if (banners.length === 0) return;
-
     for (const banner of banners) {
         if (!tarimaActiva) {
             banner.style.display = 'none';
             banner.innerHTML = '';
             continue;
         }
-
         const nSKUs = Object.keys(tarimaActiva.escaneos).length;
         const nCajas = Object.values(tarimaActiva.escaneos).reduce((s, x) => s + (Number(x.cajas) || 0), 0);
-
         const existingId = banner.querySelector('[data-tarima-id]');
         const existingStats = banner.querySelector('[data-tarima-stats]');
-
         if (existingId && existingStats) {
             existingId.textContent = tarimaActiva.id;
             existingStats.textContent = `${nSKUs} SKU · ${nCajas} cajas escaneadas`;
             banner.style.display = 'block';
             continue;
         }
-
         banner.style.display = 'block';
         banner.innerHTML = `
             <div class="card card-padded" style="background:linear-gradient(135deg,rgba(10,132,255,0.12),rgba(191,90,242,0.08));border:0.5px solid rgba(10,132,255,0.3);">
@@ -691,7 +638,6 @@ function actualizarBannerTarima() {
                 </div>
             </div>
         `;
-
         banner.querySelectorAll('.btn-verificar-tarima').forEach(b => b.addEventListener('click', validarTarima));
         banner.querySelectorAll('.btn-cancelar-tarima').forEach(b => b.addEventListener('click', cancelarTarima));
     }
@@ -701,9 +647,7 @@ function actualizarHeaderTarimaBadge() {
     let badge = document.getElementById('headerTarimaBadge');
     const header = document.querySelector('.app-header-inner');
     if (!header) return;
-
     if (!tarimaActiva) { if (badge) badge.remove(); return; }
-
     if (!badge) {
         badge = document.createElement('div');
         badge.id = 'headerTarimaBadge';
@@ -715,77 +659,73 @@ function actualizarHeaderTarimaBadge() {
     badge.innerHTML = `<i class="fas fa-pallet"></i> ${escapeHtml(tarimaActiva.id)} · ${nCajas}`;
 }
 
-// ===== VALIDACIÓN CONTRA REFERENCIA =====
+// ✅ FIX #5 (parte 2): validarTarima ahora agrupa por MATERIAL, no por descNorm del código
 function validarTarima() {
     if (!tarimaActiva) { showToast('No hay tarima activa', 'warning'); return; }
     const refObj = window.catalogs?.obtenerTarima(tarimaActiva.id);
     if (!refObj) { showToast('❌ No hay referencia cargada para esta tarima', 'error'); return; }
-
     const escaneado = tarimaActiva.escaneos;
     const escaneadoPorMaterial = {};
-
     for (const [cod, item] of Object.entries(escaneado)) {
         const codInfo = window.catalogs?.buscar(cod);
-        const materialKey = codInfo ? codInfo.descNorm : null;
+        // ✅ FIX #5: usar el material como clave de agrupación (no descNorm)
+        const materialKey = codInfo && codInfo.material ? codInfo.material : null;
         const descripcionEsc = codInfo ? codInfo.descripcion : (item.nombre || cod);
-
         if (!materialKey) {
             const key = '__sin_match__' + cod;
             escaneadoPorMaterial[key] = {
                 descripcion: descripcionEsc, codigoOriginal: cod,
-                codigos: [cod], cajas: item.cajas, match: false
+                codigos: [cod], cajas: item.cajas, match: false,
+                material: null
             };
             continue;
         }
-
         if (!escaneadoPorMaterial[materialKey]) {
             escaneadoPorMaterial[materialKey] = {
                 descripcion: descripcionEsc, codigoOriginal: cod,
-                codigos: [], cajas: 0, match: true
+                codigos: [], cajas: 0, match: true,
+                material: materialKey
             };
         }
         if (!escaneadoPorMaterial[materialKey].codigos.includes(cod)) escaneadoPorMaterial[materialKey].codigos.push(cod);
         escaneadoPorMaterial[materialKey].cajas += item.cajas;
     }
-
     const ordenOriginal = window.catalogs?.obtenerOrdenTarima(tarimaActiva.id) || [];
     const filasReporte = [];
     const yaIncluidos = new Set();
-
+    // ✅ FIX #5: iterar por material (descNorm) de la referencia
     for (const materialKey of ordenOriginal) {
         const ref = refObj[materialKey];
         if (!ref) continue;
-        const esc = escaneadoPorMaterial[materialKey] || { cajas: 0, match: false };
+        // Buscar el escaneo que corresponda a este material
+        const esc = escaneadoPorMaterial[ref.material] || { cajas: 0, match: false };
         const esperado = ref.cajas_esperadas || 0;
         const escaneadoCant = esc.cajas || 0;
         const diff = escaneadoCant - esperado;
         const estado = diff === 0 ? 'OK' : (diff < 0 ? 'FALTA' : 'SOBRA');
-
         filasReporte.push({
             codigo: esc.codigoOriginal || '',
             codigos: esc.codigos || (esc.codigoOriginal ? [esc.codigoOriginal] : []),
             material: ref.material, descripcion: ref.descripcion,
             referencia: tarimaActiva.id,
             cajas_esperadas: esperado, cajas_escaneadas: escaneadoCant,
-            diferencia: diff, estado, match: esc.match
+            diferencia: diff, estado, match: esc.match,
+            materialKey: materialKey
         });
-        yaIncluidos.add(materialKey);
+        yaIncluidos.add(ref.material);
     }
-
     for (const [key, esc] of Object.entries(escaneadoPorMaterial)) {
         if (yaIncluidos.has(key)) continue;
         filasReporte.push({
             codigo: esc.codigoOriginal || '', codigos: esc.codigos || [],
-            material: '', descripcion: esc.descripcion,
+            material: esc.material || '', descripcion: esc.descripcion,
             referencia: tarimaActiva.id,
             cajas_esperadas: 0, cajas_escaneadas: esc.cajas,
             diferencia: esc.cajas, estado: 'EXTRA', match: esc.match
         });
     }
-
     let totalEsperadoCajas = 0, totalEscaneadoCajas = 0;
     let totalFaltantes = 0, totalSobrantes = 0, totalOK = 0, totalExtras = 0;
-
     for (const f of filasReporte) {
         totalEsperadoCajas += f.cajas_esperadas;
         totalEscaneadoCajas += f.cajas_escaneadas;
@@ -794,7 +734,6 @@ function validarTarima() {
         else if (f.estado === 'EXTRA') totalExtras++;
         else if (f.estado === 'OK') totalOK++;
     }
-
     const reporte = {
         tarima: tarimaActiva.id, filas: filasReporte, orden: ordenOriginal,
         totalEsperadoCajas, totalEscaneadoCajas,
@@ -802,7 +741,6 @@ function validarTarima() {
         totalSKUsEsc: Object.keys(escaneadoPorMaterial).length,
         resumen: { ok: totalOK, faltantes: totalFaltantes, sobrantes: totalSobrantes, extras: totalExtras }
     };
-
     window._ultimoReporteTarima = reporte;
     mostrarReporteTarima(reporte);
 }
@@ -810,20 +748,15 @@ function validarTarima() {
 // ===== REPORTE MEJORADO =====
 function mostrarReporteTarima(rep) {
     ScannerState.block('modal');
-
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
-
     const faltantes = rep.filas.filter(f => f.estado === 'FALTA');
     const extras    = rep.filas.filter(f => f.estado === 'EXTRA');
     const perfecto  = faltantes.length === 0 && extras.length === 0;
     const diffTotal = rep.totalEscaneadoCajas - rep.totalEsperadoCajas;
-
     const iconColor = perfecto ? 'var(--green)' : 'var(--red)';
     const iconName  = perfecto ? 'check-circle' : 'exclamation-triangle';
-
     let filasHtml = '';
-
     if (perfecto) {
         filasHtml = `
             <div style="text-align:center;padding:32px 20px;">
@@ -834,10 +767,8 @@ function mostrarReporteTarima(rep) {
         `;
     } else {
         filasHtml += `<div style="font-size:0.7rem;font-weight:800;color:var(--label);letter-spacing:0.6px;margin:12px 0 8px 0;text-transform:uppercase;">📦 Escaneado (orden del archivo)</div>`;
-
-        for (const materialKey of rep.orden) {
-            const fila = rep.filas.find(f => f.descripcion && window.catalogs?.normalizar(f.descripcion) === materialKey);
-            if (!fila) continue;
+        for (const fila of rep.filas) {
+            if (fila.estado === 'EXTRA') continue;
             const esc = fila.cajas_escaneadas || 0;
             const esp = fila.cajas_esperadas || 0;
             const diff = esc - esp;
@@ -862,7 +793,6 @@ function mostrarReporteTarima(rep) {
                 </div>
             `;
         }
-
         if (faltantes.length > 0) {
             filasHtml += `<div style="font-size:0.7rem;font-weight:800;color:var(--red);letter-spacing:0.6px;margin:16px 0 8px 0;text-transform:uppercase;">🔴 Faltantes (${faltantes.length})</div>`;
             faltantes.forEach(f => {
@@ -882,7 +812,6 @@ function mostrarReporteTarima(rep) {
                 `;
             });
         }
-
         if (extras.length > 0) {
             filasHtml += `<div style="font-size:0.7rem;font-weight:800;color:var(--purple);letter-spacing:0.6px;margin:16px 0 8px 0;text-transform:uppercase;">🟣 Extras (no en referencia) · ${extras.length}</div>`;
             extras.forEach(f => {
@@ -902,7 +831,6 @@ function mostrarReporteTarima(rep) {
             });
         }
     }
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -928,11 +856,9 @@ function mostrarReporteTarima(rep) {
             </div>
         </div>
     `;
-
     document.body.appendChild(overlay);
     void overlay.offsetWidth;
     overlay.classList.add('active');
-
     const cerrar = () => {
         overlay.classList.remove('active');
         setTimeout(() => {
@@ -940,7 +866,6 @@ function mostrarReporteTarima(rep) {
             ScannerState.unblock('modal');
         }, 300);
     };
-
     document.getElementById('repConfirmar').addEventListener('click', () => {
         if (!tarimaActiva) { showToast('⚠️ La tarima ya no está activa', 'warning'); cerrar(); return; }
         const idTarima = tarimaActiva.id;
@@ -951,7 +876,6 @@ function mostrarReporteTarima(rep) {
         actualizarHeaderTarimaBadge();
         cerrar();
     });
-
     document.getElementById('repExportar').addEventListener('click', () => exportarReporteTarimaCSV(rep, faltantes, extras));
     document.getElementById('repSeguir').addEventListener('click', cerrar);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
@@ -966,29 +890,23 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
         }
         return String(f.codigo || '').replace(/[\r\n]+/g, ' ');
     };
-
     const headers = ['codigo', 'material', 'descripcion', 'referencia', 'cajas_esperadas', 'cajas_escaneadas', 'diferencia', 'estado'];
     const rows = [headers];
-
     rows.push(['# ESCANEADO EN ORDEN DEL ARCHIVO', '', '', '', '', '', '', '']);
-    for (const materialKey of rep.orden) {
-        const f = rep.filas.find(x => x.descripcion && window.catalogs?.normalizar(x.descripcion) === materialKey);
-        if (!f) continue;
+    for (const f of rep.filas) {
+        if (f.estado === 'EXTRA') continue;
         rows.push([codigosDeFila(f), f.material || '', f.descripcion || '', f.referencia || '', f.cajas_esperadas, f.cajas_escaneadas, f.diferencia, f.estado]);
     }
-
     if (faltantes && faltantes.length > 0) {
         rows.push([]);
         rows.push(['# FALTANTES', '', '', '', '', '', '', '']);
         for (const f of faltantes) rows.push([codigosDeFila(f), f.material || '', f.descripcion || '', f.referencia || '', f.cajas_esperadas, f.cajas_escaneadas, f.diferencia, 'FALTA']);
     }
-
     if (extras && extras.length > 0) {
         rows.push([]);
         rows.push(['# EXTRAS', '', '', '', '', '', '', '']);
         for (const f of extras) rows.push([codigosDeFila(f), f.material || '', f.descripcion || '', f.referencia || '', f.cajas_esperadas, f.cajas_escaneadas, f.diferencia, 'EXTRA']);
     }
-
     rows.push([]);
     rows.push(['# RESUMEN', '', '', '', '', '', '', '']);
     rows.push(['# Tarima', rep.tarima, '', '', '', '', '', '']);
@@ -997,14 +915,12 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
     rows.push(['# Diferencia total', rep.totalEscaneadoCajas - rep.totalEsperadoCajas, '', '', '', '', '', '']);
     rows.push(['# Faltantes', rep.resumen.faltantes, '', '', '', '', '', '']);
     rows.push(['# Extras', rep.resumen.extras, '', '', '', '', '', '']);
-
     const csvContent = rows.map(row =>
         row.map(cell => {
             const s = String(cell == null ? '' : cell);
             return `"${s.replace(/"/g, '""')}"`;
         }).join(',')
     ).join('\n');
-
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -1015,7 +931,6 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-
     showToast(`📥 Reporte exportado`, 'success');
 }
 
@@ -1023,12 +938,9 @@ function exportarReporteTarimaCSV(rep, faltantes, extras) {
 function abrirSelectorTarima() {
     const tarimas = window.catalogs?.listarTarimas() || [];
     if (tarimas.length === 0) { showToast('⚠️ Sube un archivo de materiales con columna "referencia" primero', 'warning'); return; }
-
     ScannerState.block('modal');
-
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
-
     let listaHtml = tarimas.map(tid => {
         const meta = window.catalogs.tarimasMeta[tid] || { skus: 0, totalCajas: 0 };
         return `
@@ -1042,7 +954,6 @@ function abrirSelectorTarima() {
             </button>
         `;
     }).join('');
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -1055,11 +966,9 @@ function abrirSelectorTarima() {
             <div class="modal-actions"><button class="modal-btn modal-btn-cancel" id="tarCancel">Cancelar</button></div>
         </div>
     `;
-
     document.body.appendChild(overlay);
     void overlay.offsetWidth;
     overlay.classList.add('active');
-
     const cerrar = () => {
         overlay.classList.remove('active');
         setTimeout(() => {
@@ -1067,7 +976,6 @@ function abrirSelectorTarima() {
             ScannerState.unblock('modal');
         }, 300);
     };
-
     overlay.querySelectorAll('[data-tarima]').forEach(btn => {
         btn.addEventListener('click', () => {
             const tid = btn.getAttribute('data-tarima');
@@ -1075,7 +983,6 @@ function abrirSelectorTarima() {
             setTimeout(() => iniciarTarima(tid), 250);
         });
     });
-
     document.getElementById('tarCancel').addEventListener('click', cerrar);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
 }
@@ -1086,7 +993,6 @@ function eliminarProducto(codigo) {
     if (!prod) return;
     const nombre = prod.nombre || codigo;
     const cajas = prod.cantidadCajas;
-
     showModal({
         icon: 'trash', iconType: 'error', title: 'Eliminar producto',
         message: `¿Eliminar "${nombre}" y sus ${cajas} caja(s)?`,
@@ -1108,7 +1014,6 @@ function editarCantidad(codigo) {
     if (!productos[codigo]) return;
     const prod = productos[codigo];
     let currentQty = prod.cantidadCajas;
-
     showModal({
         icon: 'pen', iconType: 'normal', title: 'Editar cantidad',
         productInfo: { name: prod.nombre || codigo, code: codigo },
@@ -1133,13 +1038,10 @@ function editarCantidad(codigo) {
 
 // ===== RENDERIZAR PRODUCTOS =====
 let productsContainerListenerAttached = false;
-
 function renderizarProductos() {
     const container = document.getElementById("productsList");
     if (!container) return;
-
     const productosArray = Object.values(productos).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     if (productosArray.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -1150,13 +1052,11 @@ function renderizarProductos() {
         `;
         return;
     }
-
     let html = '';
     productosArray.forEach(prod => {
         const displayName = prod.nombre || "📦 Producto sin descripción";
         const displayBrand = prod.marca || "";
         const hasBrand = displayBrand && displayBrand !== "Marca no especificada" && displayBrand !== "Sin material" && displayBrand !== "Base de datos local";
-
         html += `
             <div class="product-card" data-code="${escapeHtml(prod.codigo)}">
                 <div class="product-body">
@@ -1183,7 +1083,6 @@ function renderizarProductos() {
         `;
     });
     container.innerHTML = html;
-
     if (!productsContainerListenerAttached) {
         productsContainerListenerAttached = true;
         container.addEventListener('click', (e) => {
@@ -1209,21 +1108,16 @@ function renderizarProductos() {
 function showModal(options = {}) {
     const opts = Object.assign({}, options);
     if (!Array.isArray(opts.actions)) opts.actions = [];
-
     ScannerState.block('modal');
-
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
-
     let iconHtml = '';
     if (opts.icon) {
         const iconClass = opts.iconType === 'error' ? 'error' : opts.iconType === 'warning' ? 'warning' : '';
         iconHtml = `<div class="scan-success-icon ${iconClass}"><i class="fas fa-${opts.icon}"></i></div>`;
     }
-
     let productInfoHtml = '';
     if (opts.productInfo) {
         productInfoHtml = `
@@ -1233,7 +1127,6 @@ function showModal(options = {}) {
             </div>
         `;
     }
-
     let stepperHtml = '';
     if (opts.stepper) {
         let val = opts.stepper.value;
@@ -1246,7 +1139,6 @@ function showModal(options = {}) {
             </div>
         `;
     }
-
     let actionsHtml = '';
     opts.actions.forEach((action, idx) => {
         if (action.type === 'cancel') actionsHtml += `<button class="modal-btn modal-btn-cancel" data-action="cancel-${idx}">${escapeHtml(action.text)}</button>`;
@@ -1254,7 +1146,6 @@ function showModal(options = {}) {
         else if (action.type === 'secondary') actionsHtml += `<button class="modal-btn modal-btn-secondary" data-action="action-${idx}">${escapeHtml(action.text)}</button>`;
         else actionsHtml += `<button class="modal-btn modal-btn-primary" data-action="action-${idx}">${escapeHtml(action.text)}</button>`;
     });
-
     overlay.innerHTML = `
         <div class="modal-sheet">
             <div class="modal-handle"></div>
@@ -1266,11 +1157,9 @@ function showModal(options = {}) {
             <div class="modal-actions">${actionsHtml}</div>
         </div>
     `;
-
     document.body.appendChild(overlay);
     void overlay.offsetWidth;
     overlay.classList.add('active');
-
     if (opts.stepper) {
         let currentVal = opts.stepper.value;
         const valEl = document.getElementById('modalStepValue');
@@ -1281,9 +1170,7 @@ function showModal(options = {}) {
             currentVal++; valEl.textContent = currentVal; opts.stepper.onChange(currentVal);
         });
     }
-
     let escHandler = null;
-
     function closeModal() {
         overlay.classList.remove('active');
         if (escHandler) { document.removeEventListener('keydown', escHandler); escHandler = null; }
@@ -1292,7 +1179,6 @@ function showModal(options = {}) {
             ScannerState.unblock('modal');
         }, 300);
     }
-
     opts.actions.forEach((action, idx) => {
         const selector = action.type === 'cancel' ? `[data-action="cancel-${idx}"]` : `[data-action="action-${idx}"]`;
         const btn = overlay.querySelector(selector);
@@ -1303,7 +1189,6 @@ function showModal(options = {}) {
             });
         }
     });
-
     overlay.addEventListener('click', (e) => {
         if (e.target === overlay) {
             closeModal();
@@ -1311,7 +1196,6 @@ function showModal(options = {}) {
             if (cancelAction && cancelAction.action) cancelAction.action();
         }
     });
-
     escHandler = (e) => {
         if (e.key === 'Escape') {
             closeModal();
@@ -1324,6 +1208,7 @@ function showModal(options = {}) {
 window.showModal = showModal;
 
 // ===== EXPORTAR CSV (inventario general) =====
+// ✅ FIX #11: exportarCSV solo envuelve en comillas cuando es necesario
 function exportarCSV() {
     const productosArray = Object.values(productos).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     if (productosArray.length === 0) { showToast("No hay datos para exportar", "error"); return; }
@@ -1336,7 +1221,15 @@ function exportarCSV() {
             new Date(prod.timestamp).toLocaleString()
         ]);
     }
-    const csvContent = csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csvContent = csvRows.map(row => row.map(cell => {
+        const s = String(cell == null ? '' : cell);
+        // ✅ FIX #11: solo envolver si contiene caracteres especiales
+        if (typeof cell === 'number') return String(cell);
+        if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+            return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+    }).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -1375,19 +1268,15 @@ function resetSistema() {
 // ===== INICIALIZACIÓN =====
 document.addEventListener("DOMContentLoaded", async () => {
     console.log("🚀 Inicializando Scansoriana...");
-
     await database.esperarInicializacion();
     console.log("✅ SQLite listo");
-
     if (typeof DBManager === 'undefined') {
         console.error('❌ DBManager no está definido.');
         showToast('❌ Error cargando DB Manager', 'error');
         return;
     }
-
     const dbManager = new DBManager(database);
     window.dbManager = dbManager;
-
     const stats = database.obtenerEstadisticas();
     if (stats.usandoSQLite && !stats.usandoFallback) {
         console.log('✅ Usando SQLite real');
@@ -1396,18 +1285,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         console.warn('⚠️ Usando fallback localStorage');
         showToast('⚠️ Usando fallback localStorage', 'warning');
     }
-
     if (window.catalogs) {
         const cs = window.catalogs.obtenerStats();
         if (cs.codigos > 0 || cs.materiales > 0) {
             console.log(`📦 Catálogos: ${cs.materiales} materiales, ${cs.codigos} códigos, ${cs.tarimas} tarimas`);
         }
     }
-
     cargarDatos();
     actualizarHeaderTarimaBadge();
-
-    // ✅ Inicializar la máquina de estados del escáner
     ScannerState.init({
         onScan: (codigo, origen) => {
             const lastEl = document.getElementById('lastScanned');
@@ -1429,10 +1314,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         },
     });
     ScannerState.activate();
-
     const iniciarTarimaBtn = document.getElementById("iniciarTarimaBtn");
     if (iniciarTarimaBtn) iniciarTarimaBtn.addEventListener("click", abrirSelectorTarima);
-
     const startBtn = document.getElementById("startScannerBtn");
     if (startBtn) {
         startBtn.addEventListener("click", function() {
@@ -1461,11 +1344,9 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
     }
-
     const addManualBtn = document.getElementById("addManualBtn");
     const manualCode = document.getElementById("manualCode");
     const cajasQuantity = document.getElementById("cajasQuantity");
-
     if (addManualBtn && manualCode && cajasQuantity) {
         addManualBtn.addEventListener("click", async () => {
             const code = manualCode.value.trim();
@@ -1479,15 +1360,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             } finally { addManualBtn.disabled = false; }
             manualCode.focus();
         });
-
         manualCode.addEventListener("keypress", (e) => { if (e.key === "Enter") addManualBtn.click(); });
     }
-
     const exportBtn = document.getElementById("exportExcelBtn");
     const resetBtn = document.getElementById("resetAllBtn");
     if (exportBtn) exportBtn.addEventListener("click", exportarCSV);
     if (resetBtn) resetBtn.addEventListener("click", resetSistema);
-
     function abrirSettings() {
         ScannerState.block('settings');
         const settingsOverlay = document.getElementById('settingsOverlay');
@@ -1503,7 +1381,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     }
     window.abrirSettings = abrirSettings;
-
     function cerrarSettings() {
         const settingsOverlay = document.getElementById('settingsOverlay');
         if (settingsOverlay) settingsOverlay.classList.remove('active');
@@ -1513,13 +1390,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }, 300);
     }
     window.cerrarSettings = cerrarSettings;
-
     const settingsClose = document.getElementById('settingsClose');
     if (settingsClose) settingsClose.addEventListener('click', (e) => { e.preventDefault(); cerrarSettings(); });
-
     const settingsOverlayEl = document.getElementById('settingsOverlay');
     if (settingsOverlayEl) settingsOverlayEl.addEventListener('click', (e) => { if (e.target === settingsOverlayEl) cerrarSettings(); });
-
     setTimeout(async () => {
         try {
             await database.esperarInicializacion();
@@ -1539,7 +1413,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         } catch (e) { console.error('❌ Error verificando DB:', e); }
     }, 500);
-
     window.addEventListener("beforeunload", () => {
         if (html5QrCode && isScanning) html5QrCode.stop().catch(e => console.log(e));
     });
